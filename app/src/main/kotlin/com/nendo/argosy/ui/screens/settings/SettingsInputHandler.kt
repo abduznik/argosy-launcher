@@ -255,6 +255,7 @@ class SettingsInputHandler(
             val outerEffectIdx = idx++
             val outerThicknessIdx = if (showOuterThickness) idx++ else -1
             val glowIntensityIdx = if (showGlowIntensity) idx++ else -1
+            val glowColorIdx = if (showGlowIntensity) idx++ else -1
             val innerEffectIdx = idx++
             val innerThicknessIdx = if (showInnerThickness) idx++ else -1
             when (state.focusedIndex) {
@@ -277,6 +278,7 @@ class SettingsInputHandler(
                 outerEffectIdx -> viewModel.cycleBoxArtOuterEffect(-1)
                 outerThicknessIdx -> viewModel.cycleBoxArtOuterEffectThickness(-1)
                 glowIntensityIdx -> viewModel.cycleBoxArtGlowStrength(-1)
+                glowColorIdx -> viewModel.cycleGlowColorMode(-1)
                 innerEffectIdx -> viewModel.cycleBoxArtInnerEffect(-1)
                 innerThicknessIdx -> viewModel.cycleBoxArtInnerEffectThickness(-1)
             }
@@ -489,6 +491,7 @@ class SettingsInputHandler(
             val outerEffectIdx = idx++
             val outerThicknessIdx = if (showOuterThickness) idx++ else -1
             val glowIntensityIdx = if (showGlowIntensity) idx++ else -1
+            val glowColorIdx = if (showGlowIntensity) idx++ else -1
             val innerEffectIdx = idx++
             val innerThicknessIdx = if (showInnerThickness) idx++ else -1
             when (state.focusedIndex) {
@@ -511,6 +514,7 @@ class SettingsInputHandler(
                 outerEffectIdx -> viewModel.cycleBoxArtOuterEffect(1)
                 outerThicknessIdx -> viewModel.cycleBoxArtOuterEffectThickness(1)
                 glowIntensityIdx -> viewModel.cycleBoxArtGlowStrength(1)
+                glowColorIdx -> viewModel.cycleGlowColorMode(1)
                 innerEffectIdx -> viewModel.cycleBoxArtInnerEffect(1)
                 innerThicknessIdx -> viewModel.cycleBoxArtInnerEffectThickness(1)
             }
