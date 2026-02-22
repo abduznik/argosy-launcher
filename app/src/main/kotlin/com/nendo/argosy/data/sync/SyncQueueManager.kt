@@ -19,7 +19,8 @@ data class ConflictInfo(
     val channelName: String?,
     val localTimestamp: Instant,
     val serverTimestamp: Instant,
-    val isHashConflict: Boolean
+    val isHashConflict: Boolean,
+    val serverDeviceName: String? = null
 )
 
 data class SyncOperation(

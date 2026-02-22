@@ -70,7 +70,8 @@ data class SaveConflictEvent(
     val emulatorId: String,
     val channelName: String?,
     val localTimestamp: Instant,
-    val serverTimestamp: Instant
+    val serverTimestamp: Instant,
+    val serverDeviceName: String? = null
 )
 
 @Singleton
@@ -551,7 +552,8 @@ class PlaySessionTracker @Inject constructor(
                         emulatorId = result.emulatorId,
                         channelName = result.channelName,
                         localTimestamp = result.localTimestamp,
-                        serverTimestamp = result.serverTimestamp
+                        serverTimestamp = result.serverTimestamp,
+                        serverDeviceName = result.serverDeviceName
                     )
                 )
             }

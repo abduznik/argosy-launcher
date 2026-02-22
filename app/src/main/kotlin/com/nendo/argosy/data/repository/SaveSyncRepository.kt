@@ -17,7 +17,8 @@ sealed class SaveSyncResult {
     data class Conflict(
         val gameId: Long,
         val localTimestamp: Instant,
-        val serverTimestamp: Instant
+        val serverTimestamp: Instant,
+        val serverDeviceName: String? = null
     ) : SaveSyncResult()
     data class NeedsHardcoreResolution(
         val tempFilePath: String,

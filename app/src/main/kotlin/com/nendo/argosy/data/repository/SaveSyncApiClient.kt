@@ -453,7 +453,7 @@ class SaveSyncApiClient @Inject constructor(
                 if (sessionOnOlderSave[gameId] == true) {
                     Logger.warn(TAG, "[SaveSync] UPLOAD gameId=$gameId | Session started on older save -- conflict for channel=$channelName")
                     val serverTime = latestServerSave?.let { parseTimestamp(it.updatedAt) } ?: Instant.now()
-                    return@withContext SaveSyncResult.Conflict(gameId, localModified, serverTime)
+                    return@withContext SaveSyncResult.Conflict(gameId, localModified, serverTime, extractUploaderDeviceName(latestServerSave))
                 }
             }
 
@@ -464,7 +464,7 @@ class SaveSyncApiClient @Inject constructor(
                 Logger.debug(TAG, "[SaveSync] UPLOAD gameId=$gameId | Conflict check | local=$localModified, server=$serverTime, delta=$deltaStr")
                 if (serverTime.isAfter(localModified)) {
                     Logger.debug(TAG, "[SaveSync] UPLOAD gameId=$gameId | Decision=CONFLICT | Server is newer, blocking upload")
-                    return@withContext SaveSyncResult.Conflict(gameId, localModified, serverTime)
+                    return@withContext SaveSyncResult.Conflict(gameId, localModified, serverTime, extractUploaderDeviceName(latestServerSave))
                 }
                 Logger.debug(TAG, "[SaveSync] UPLOAD gameId=$gameId | Decision=PROCEED | Local is newer or equal")
             } else if (forceOverwrite) {
@@ -533,7 +533,7 @@ class SaveSyncApiClient @Inject constructor(
             if (response.code() == 409) {
                 val serverTime = latestServerSave?.let { parseTimestamp(it.updatedAt) } ?: Instant.now()
                 Logger.debug(TAG, "[SaveSync] UPLOAD gameId=$gameId | Decision=CONFLICT | Server returned 409 (device out of sync)")
-                return@withContext SaveSyncResult.Conflict(gameId, localModified, serverTime)
+                return@withContext SaveSyncResult.Conflict(gameId, localModified, serverTime, extractUploaderDeviceName(latestServerSave))
             }
 
             if (response.isSuccessful) {
@@ -633,7 +633,7 @@ class SaveSyncApiClient @Inject constructor(
                 val serverTime = latestForSlot?.let { parseTimestamp(it.updatedAt) } ?: Instant.now()
                 val localTime = Instant.ofEpochMilli(cacheFile.lastModified())
                 Logger.warn(TAG, "[SaveSync] UPLOAD_CACHE gameId=$gameId | Session started on older save -- conflict for channel=$channelName | local=$localTime, server=$serverTime")
-                return@withContext SaveSyncResult.Conflict(gameId, localTime, serverTime)
+                return@withContext SaveSyncResult.Conflict(gameId, localTime, serverTime, extractUploaderDeviceName(latestForSlot))
             }
         }
 
@@ -667,8 +667,14 @@ class SaveSyncApiClient @Inject constructor(
             }
 
             if (response.code() == 409) {
-                Logger.debug(TAG, "[SaveSync] UPLOAD_CACHE gameId=$gameId | Server returned 409 (device out of sync for slot=$channelName)")
-                return@withContext SaveSyncResult.Conflict(gameId, Instant.now(), Instant.now())
+                val conflictSaves = try { checkSavesForGame(gameId, rommId) } catch (_: Exception) { emptyList() }
+                val conflictSlotSave = conflictSaves
+                    .filter { it.slot == channelName }
+                    .maxByOrNull { parseTimestamp(it.updatedAt) }
+                val serverTime = conflictSlotSave?.let { parseTimestamp(it.updatedAt) } ?: Instant.now()
+                val localTime = Instant.ofEpochMilli(cacheFile.lastModified())
+                Logger.debug(TAG, "[SaveSync] UPLOAD_CACHE gameId=$gameId | Server returned 409 (device out of sync for slot=$channelName) | local=$localTime, server=$serverTime")
+                return@withContext SaveSyncResult.Conflict(gameId, localTime, serverTime, extractUploaderDeviceName(conflictSlotSave))
             }
 
             if (response.isSuccessful) {
@@ -1609,6 +1615,14 @@ class SaveSyncApiClient @Inject constructor(
 
     fun isSessionOnOlderSave(gameId: Long): Boolean =
         sessionOnOlderSave[gameId] ?: false
+
+    private fun extractUploaderDeviceName(save: RomMSave?): String? {
+        val syncs = save?.deviceSyncs ?: return null
+        return syncs
+            .filter { it.deviceId != deviceId }
+            .maxByOrNull { it.lastSyncedAt ?: "" }
+            ?.deviceName
+    }
 
     companion object {
         private const val TAG = "SaveSyncApiClient"

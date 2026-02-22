@@ -37,7 +37,8 @@ data class SaveConflictInfo(
     val emulatorId: String,
     val channelName: String?,
     val localTimestamp: Instant,
-    val serverTimestamp: Instant
+    val serverTimestamp: Instant,
+    val serverDeviceName: String? = null
 )
 
 @Composable
@@ -94,6 +95,7 @@ fun SaveConflictModal(
             SaveSourceRow(
                 icon = Icons.Default.Cloud,
                 label = "Server",
+                subtitle = info.serverDeviceName,
                 timestamp = info.serverTimestamp.toRelativeString(),
                 isNewer = !localIsNewer
             )
@@ -157,7 +159,8 @@ private fun SaveSourceRow(
     icon: ImageVector,
     label: String,
     timestamp: String,
-    isNewer: Boolean
+    isNewer: Boolean,
+    subtitle: String? = null
 ) {
     val tint = if (isNewer) MaterialTheme.colorScheme.primary
     else MaterialTheme.colorScheme.onSurfaceVariant
@@ -177,13 +180,21 @@ private fun SaveSourceRow(
             modifier = Modifier.size(Dimens.iconMd)
         )
         Spacer(modifier = Modifier.width(Dimens.spacingSm))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (isNewer) FontWeight.Bold else FontWeight.Normal,
-            color = tint,
-            modifier = Modifier.weight(1f)
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isNewer) FontWeight.Bold else FontWeight.Normal,
+                color = tint
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         Text(
             text = timestamp,
             style = MaterialTheme.typography.bodySmall,

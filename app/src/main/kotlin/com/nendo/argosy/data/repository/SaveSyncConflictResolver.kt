@@ -329,6 +329,11 @@ class SaveSyncConflictResolver @Inject constructor(
             serverTime.isAfter(localModified)
         }
 
+        val uploaderDeviceName = serverSave.deviceSyncs
+            ?.filter { it.deviceId != deviceId }
+            ?.maxByOrNull { it.lastSyncedAt ?: "" }
+            ?.deviceName
+
         if (isServerNewer || isHashConflict) {
             Logger.debug(TAG, "[SaveSync] checkForConflict gameId=$gameId | Conflict detected: serverNewer=$isServerNewer (is_current=${deviceSyncEntry?.isCurrent}), hash=$isHashConflict")
             ConflictInfo(
@@ -337,7 +342,8 @@ class SaveSyncConflictResolver @Inject constructor(
                 channelName = channelName,
                 localTimestamp = localModified,
                 serverTimestamp = serverTime,
-                isHashConflict = isHashConflict
+                isHashConflict = isHashConflict,
+                serverDeviceName = uploaderDeviceName
             )
         } else {
             Logger.debug(TAG, "[SaveSync] checkForConflict gameId=$gameId | No conflict")

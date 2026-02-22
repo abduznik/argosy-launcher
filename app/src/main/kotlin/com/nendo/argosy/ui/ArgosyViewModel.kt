@@ -205,7 +205,8 @@ class ArgosyViewModel @Inject constructor(
                     emulatorId = event.emulatorId,
                     channelName = event.channelName,
                     localTimestamp = event.localTimestamp,
-                    serverTimestamp = event.serverTimestamp
+                    serverTimestamp = event.serverTimestamp,
+                    serverDeviceName = event.serverDeviceName
                 )
                 _saveConflictButtonIndex.value = 0
             }
