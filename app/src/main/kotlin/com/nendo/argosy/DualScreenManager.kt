@@ -15,6 +15,7 @@ import com.nendo.argosy.data.repository.PlatformRepository
 import com.nendo.argosy.data.model.GameSource
 import com.nendo.argosy.data.emulator.EmulatorResolver
 import com.nendo.argosy.data.preferences.SessionStateStore
+import com.nendo.argosy.data.preferences.EmulatorDisplayTarget
 import com.nendo.argosy.data.preferences.UserPreferencesRepository
 import com.nendo.argosy.data.repository.SaveCacheManager
 import com.nendo.argosy.hardware.CompanionGuardService
@@ -634,6 +635,7 @@ class DualScreenManager(
             val savedDetailGameId = sessionStateStore.getDetailGameId()
             if (savedDetailGameId > 0) selectGameSwapped(savedDetailGameId)
             companionHost?.onSessionEnded()
+            companionHost?.onRoleSwapped(isRolesSwapped)
         }
     }
 
@@ -877,24 +879,46 @@ class DualScreenManager(
     // --- Game Actions ---
 
     private fun handleDualPlay(gameId: Long, channelName: String? = null) {
-        gameLaunchDelegate.launchGame(
-            scope = scope,
-            gameId = gameId,
-            channelName = channelName,
-            onLaunch = { intent ->
-                emulatorDisplayId = displayAffinityHelper.getEmulatorDisplayId(isRolesSwapped)
-                isLaunchingGame = true
-                scope.launch { delay(3000); isLaunchingGame = false }
-                Log.d(TAG, "Game launching on display $emulatorDisplayId (swapped=$isRolesSwapped)")
-                val options = displayAffinityHelper.getActivityOptions(
-                    forEmulator = true,
-                    rolesSwapped = isRolesSwapped
-                )
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                if (options != null) activityContext.startActivity(intent, options)
-                else activityContext.startActivity(intent)
-            }
+        scope.launch {
+            val effectiveSwapped = resolveEmulatorDisplaySwapped(gameId)
+
+            gameLaunchDelegate.launchGame(
+                scope = scope,
+                gameId = gameId,
+                channelName = channelName,
+                onLaunch = { intent ->
+                    emulatorDisplayId = displayAffinityHelper.getEmulatorDisplayId(effectiveSwapped)
+                    isLaunchingGame = true
+                    scope.launch { delay(3000); isLaunchingGame = false }
+                    Log.d(TAG, "Game launching on display $emulatorDisplayId (swapped=$effectiveSwapped)")
+                    val options = displayAffinityHelper.getActivityOptions(
+                        forEmulator = true,
+                        rolesSwapped = effectiveSwapped
+                    )
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (options != null) activityContext.startActivity(intent, options)
+                    else activityContext.startActivity(intent)
+
+                    if (effectiveSwapped != isRolesSwapped) {
+                        companionHost?.onRoleSwapped(effectiveSwapped)
+                    }
+                }
+            )
+        }
+    }
+
+    private suspend fun resolveEmulatorDisplaySwapped(gameId: Long): Boolean {
+        if (!displayAffinityHelper.hasSecondaryDisplay) return isRolesSwapped
+        val platformId = gameDao.getById(gameId)?.platformId ?: return isRolesSwapped
+        val target = EmulatorDisplayTarget.fromString(
+            emulatorConfigDao.getDisplayTargetForPlatform(platformId)
         )
+        return when (target) {
+            EmulatorDisplayTarget.HERO -> isRolesSwapped
+            EmulatorDisplayTarget.LIBRARY -> !isRolesSwapped
+            EmulatorDisplayTarget.TOP -> false
+            EmulatorDisplayTarget.BOTTOM -> true
+        }
     }
 
     private fun handleDualDownload(gameId: Long) {

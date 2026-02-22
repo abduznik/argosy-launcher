@@ -671,3 +671,15 @@ enum class DualScreenInputFocus(val displayName: String) {
             entries.find { it.name == value } ?: AUTO
     }
 }
+
+enum class EmulatorDisplayTarget(val displayName: String) {
+    HERO("Same as Hero"),
+    LIBRARY("Same as Library"),
+    TOP("Top Screen"),
+    BOTTOM("Bottom Screen");
+
+    companion object {
+        fun fromString(value: String?): EmulatorDisplayTarget =
+            entries.find { it.name == value } ?: HERO
+    }
+}

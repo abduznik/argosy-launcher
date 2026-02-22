@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import com.nendo.argosy.ui.components.ActionPreference
 import com.nendo.argosy.ui.components.SectionFocusedScroll
 import com.nendo.argosy.ui.components.SwitchPreference
+import com.nendo.argosy.data.preferences.EmulatorDisplayTarget
 import com.nendo.argosy.ui.screens.settings.PlatformEmulatorConfig
 import com.nendo.argosy.ui.screens.settings.SettingsUiState
 import com.nendo.argosy.ui.screens.settings.SettingsViewModel
@@ -249,7 +250,8 @@ fun EmulatorsSection(
                             onCycleCore = { direction -> viewModel.cycleCoreForPlatform(item.config, direction) },
                             onExtensionChange = { extension -> viewModel.changeExtensionForPlatform(item.config, extension) },
                             onSavePathClick = { viewModel.showSavePathModal(item.config) },
-                            onToggleLegacyMode = { viewModel.toggleLegacyMode(item.config) }
+                            onToggleLegacyMode = { viewModel.toggleLegacyMode(item.config) },
+                            onCycleDisplayTarget = { direction -> viewModel.cycleDisplayTarget(item.config, direction) }
                         )
                     }
                 }
@@ -302,7 +304,8 @@ private fun PlatformEmulatorItem(
     onCycleCore: (Int) -> Unit,
     onExtensionChange: (String) -> Unit,
     onSavePathClick: () -> Unit,
-    onToggleLegacyMode: () -> Unit
+    onToggleLegacyMode: () -> Unit,
+    onCycleDisplayTarget: (Int) -> Unit = {}
 ) {
     val disabledAlpha = 0.45f
     val backgroundColor = if (isFocused) {
@@ -575,6 +578,62 @@ private fun PlatformEmulatorItem(
                 } else {
                     Text(
                         text = if (config.useFileUri) "On" else "Off",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
+        if (config.showDisplayTargetOption) {
+            Spacer(modifier = Modifier.height(Dimens.spacingXs))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Dimens.spacingSm)
+            ) {
+                Text(
+                    text = "Display",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = secondaryColor
+                )
+                if (isFocused) {
+                    EmulatorDisplayTarget.entries.forEach { target ->
+                        val isSelected = config.displayTarget == target
+                        if (isSelected) {
+                            OutlinedButton(
+                                onClick = { },
+                                modifier = Modifier.height(Dimens.iconLg - Dimens.spacingXs),
+                                contentPadding = PaddingValues(horizontal = Dimens.spacingSm, vertical = Dimens.elevationNone),
+                                border = BorderStroke(Dimens.borderThin, MaterialTheme.colorScheme.onPrimaryContainer)
+                            ) {
+                                Text(
+                                    text = target.displayName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        } else {
+                            TextButton(
+                                onClick = {
+                                    val currentIndex = EmulatorDisplayTarget.entries.indexOf(config.displayTarget)
+                                    val targetIndex = EmulatorDisplayTarget.entries.indexOf(target)
+                                    onCycleDisplayTarget(targetIndex - currentIndex)
+                                },
+                                modifier = Modifier.height(Dimens.iconLg - Dimens.spacingXs),
+                                contentPadding = PaddingValues(horizontal = Dimens.spacingSm, vertical = Dimens.elevationNone)
+                            ) {
+                                Text(
+                                    text = target.displayName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Text(
+                        text = config.displayTarget.displayName,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )

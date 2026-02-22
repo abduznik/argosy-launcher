@@ -128,6 +128,25 @@ class ConfigureEmulatorUseCase @Inject constructor(
         }
     }
 
+    suspend fun setDisplayTargetForPlatform(platformId: Long, displayTarget: String?) {
+        val existing = emulatorConfigDao.getDefaultForPlatform(platformId)
+        if (existing != null) {
+            emulatorConfigDao.updateDisplayTargetForPlatform(platformId, displayTarget)
+        } else {
+            emulatorConfigDao.insert(
+                EmulatorConfigEntity(
+                    platformId = platformId,
+                    gameId = null,
+                    packageName = null,
+                    displayName = null,
+                    coreName = null,
+                    displayTarget = displayTarget,
+                    isDefault = true
+                )
+            )
+        }
+    }
+
     suspend fun clearBuiltinSelections() {
         emulatorConfigDao.clearPlatformConfigsByPackage(EmulatorRegistry.BUILTIN_PACKAGE)
     }

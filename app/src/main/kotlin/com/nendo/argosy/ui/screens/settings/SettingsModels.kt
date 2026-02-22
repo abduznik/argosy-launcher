@@ -30,6 +30,7 @@ import com.nendo.argosy.data.preferences.ThemeMode
 import com.nendo.argosy.data.preferences.AmbientLedColorMode
 import com.nendo.argosy.data.preferences.DisplayRoleOverride
 import com.nendo.argosy.data.preferences.DualScreenInputFocus
+import com.nendo.argosy.data.preferences.EmulatorDisplayTarget
 import com.nendo.argosy.ui.input.SoundConfig
 import com.nendo.argosy.ui.input.SoundPreset
 import com.nendo.argosy.ui.input.SoundType
@@ -83,13 +84,16 @@ data class PlatformEmulatorConfig(
     val showSavePath: Boolean = false,
     val extensionOptions: List<ExtensionOption> = emptyList(),
     val selectedExtension: String? = null,
-    val useFileUri: Boolean = false
+    val useFileUri: Boolean = false,
+    val displayTarget: EmulatorDisplayTarget = EmulatorDisplayTarget.HERO,
+    val hasSecondaryDisplay: Boolean = false
 ) {
     val hasInstalledEmulators: Boolean get() = availableEmulators.isNotEmpty()
     val isRetroArchSelected: Boolean get() = selectedEmulatorPackage?.startsWith("com.retroarch") == true
     val showCoreSelection: Boolean get() = effectiveEmulatorIsRetroArch && availableCores.isNotEmpty()
     val showExtensionSelection: Boolean get() = extensionOptions.isNotEmpty()
     val showLegacyModeOption: Boolean get() = effectiveEmulatorId == "drastic"
+    val showDisplayTargetOption: Boolean get() = hasSecondaryDisplay
 }
 
 data class EmulatorUpdateInfo(

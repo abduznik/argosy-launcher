@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.viewModelScope
 import com.nendo.argosy.data.cache.GradientPreset
 import com.nendo.argosy.data.emulator.EmulatorRegistry
+import com.nendo.argosy.data.preferences.EmulatorDisplayTarget
 import com.nendo.argosy.data.emulator.LaunchConfig
 import com.nendo.argosy.data.emulator.SavePathRegistry
 import com.nendo.argosy.data.remote.romm.ConnectionState
@@ -345,7 +346,9 @@ internal fun routeLoadSettings(vm: SettingsViewModel) {
                 showSavePath = showSavePath,
                 extensionOptions = extensionOptions,
                 selectedExtension = selectedExtension,
-                useFileUri = defaultConfig?.useFileUri ?: false
+                useFileUri = defaultConfig?.useFileUri ?: false,
+                displayTarget = EmulatorDisplayTarget.fromString(defaultConfig?.displayTarget),
+                hasSecondaryDisplay = vm.displayAffinityHelper.hasSecondaryDisplay
             )
         }
 

@@ -84,7 +84,7 @@ import com.nendo.argosy.data.local.entity.StateCacheEntity
         EmulatorUpdateEntity::class,
         PendingSyncQueueEntity::class
     ],
-    version = 79,
+    version = 80,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -1152,6 +1152,12 @@ abstract class ALauncherDatabase : RoomDatabase() {
         val MIGRATION_78_79 = object : Migration(78, 79) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE emulator_configs ADD COLUMN useFileUri INTEGER")
+            }
+        }
+
+        val MIGRATION_79_80 = object : Migration(79, 80) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE emulator_configs ADD COLUMN displayTarget TEXT")
             }
         }
 

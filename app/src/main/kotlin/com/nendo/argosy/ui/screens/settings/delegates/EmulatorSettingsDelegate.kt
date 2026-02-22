@@ -1,6 +1,7 @@
 package com.nendo.argosy.ui.screens.settings.delegates
 
 import android.util.Log
+import com.nendo.argosy.data.preferences.EmulatorDisplayTarget
 import com.nendo.argosy.data.emulator.EmulatorDetector
 import com.nendo.argosy.data.emulator.EmulatorDownloadManager
 import com.nendo.argosy.data.emulator.EmulatorRegistry
@@ -397,6 +398,25 @@ class EmulatorSettingsDelegate @Inject constructor(
             configureEmulatorUseCase.setUseFileUriForPlatform(
                 config.platform.id,
                 !config.useFileUri
+            )
+            onLoadSettings()
+        }
+    }
+
+    fun cycleDisplayTarget(
+        scope: CoroutineScope,
+        config: PlatformEmulatorConfig,
+        direction: Int,
+        onLoadSettings: suspend () -> Unit
+    ) {
+        val entries = EmulatorDisplayTarget.entries
+        val currentIndex = entries.indexOf(config.displayTarget)
+        val nextIndex = (currentIndex + direction).mod(entries.size)
+        val next = entries[nextIndex]
+        scope.launch {
+            configureEmulatorUseCase.setDisplayTargetForPlatform(
+                config.platform.id,
+                if (next == EmulatorDisplayTarget.HERO) null else next.name
             )
             onLoadSettings()
         }
