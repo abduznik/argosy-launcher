@@ -289,6 +289,9 @@ interface GameDao {
     @Query("SELECT * FROM games WHERE source = :source")
     suspend fun getBySource(source: GameSource): List<GameEntity>
 
+    @Query("SELECT * FROM games WHERE source IN (:sources) AND platformId = :platformId")
+    suspend fun getBySources(sources: List<GameSource>, platformId: Long): List<GameEntity>
+
     @Query("SELECT * FROM games WHERE packageName = :packageName")
     suspend fun getByPackageName(packageName: String): GameEntity?
 
@@ -595,6 +598,25 @@ interface GameDao {
 
     @Query("SELECT * FROM games WHERE cheatsFetched = 0 AND localPath IS NOT NULL LIMIT :limit")
     suspend fun getGamesWithoutCheats(limit: Int = 50): List<GameEntity>
+
+    @Query("UPDATE games SET syncDirty = 1 WHERE platformId = :platformId AND source IN (:sources)")
+    suspend fun markSyncDirty(platformId: Long, sources: List<GameSource>)
+
+    @Query("UPDATE games SET syncDirty = 0 WHERE platformId = :platformId AND source IN (:sources)")
+    suspend fun clearSyncDirty(platformId: Long, sources: List<GameSource>)
+
+    @Query("SELECT * FROM games WHERE platformId = :platformId AND syncDirty = 1 AND source IN (:sources)")
+    suspend fun getSyncDirtyGames(platformId: Long, sources: List<GameSource>): List<GameEntity>
+
+    @Query("UPDATE games SET syncDirty = 0")
+    suspend fun clearAllSyncDirty()
+
+    @Query("SELECT * FROM games WHERE platformId = :platformId AND localPath IS NOT NULL")
+    suspend fun getGamesWithLocalPathByPlatform(platformId: Long): List<GameEntity>
+
+    @Query("SELECT * FROM games WHERE platformId = :platformId AND rommId IS NOT NULL AND localPath IS NULL")
+    suspend fun getGamesWithRommIdButNoPathByPlatform(platformId: Long): List<GameEntity>
+
 }
 
 data class SearchCandidate(

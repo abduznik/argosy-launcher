@@ -82,4 +82,14 @@ interface GameFileDao {
 
     @Query("DELETE FROM game_files WHERE gameId = :gameId AND rommFileId NOT IN (:validRommFileIds)")
     suspend fun deleteInvalidFiles(gameId: Long, validRommFileIds: List<Long>)
+
+    @Query("""
+        SELECT gf.* FROM game_files gf
+        INNER JOIN games g ON gf.gameId = g.id
+        WHERE g.platformId = :platformId AND gf.localPath IS NOT NULL
+    """)
+    suspend fun getFilesWithLocalPathByPlatform(platformId: Long): List<GameFileEntity>
+
+    @Query("UPDATE game_files SET localPath = NULL, downloadedAt = NULL WHERE id = :fileId")
+    suspend fun clearLocalPath(fileId: Long)
 }

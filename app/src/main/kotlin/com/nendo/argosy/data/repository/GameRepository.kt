@@ -9,6 +9,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import com.nendo.argosy.data.emulator.M3uManager
 import com.nendo.argosy.data.local.dao.GameDao
+import com.nendo.argosy.data.local.dao.GameDiscDao
+import com.nendo.argosy.data.local.dao.GameFileDao
 import com.nendo.argosy.data.local.dao.PlatformDao
 import com.nendo.argosy.data.local.dao.SearchCandidate
 import com.nendo.argosy.data.local.entity.GameEntity
@@ -41,6 +43,8 @@ data class PlatformStats(
 class GameRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val gameDao: GameDao,
+    private val gameDiscDao: GameDiscDao,
+    private val gameFileDao: GameFileDao,
     private val platformDao: PlatformDao,
     private val romMRepository: RomMRepository,
     private val preferencesRepository: UserPreferencesRepository
@@ -440,6 +444,102 @@ class GameRepository @Inject constructor(
             }
         }
         removed
+    }
+
+    suspend fun validateLocalFilesForPlatform(platformId: Long): Int = withContext(Dispatchers.IO) {
+        if (!isStorageReady()) return@withContext 0
+
+        val games = gameDao.getGamesWithLocalPathByPlatform(platformId)
+        var invalidated = 0
+        for (game in games) {
+            val path = game.localPath ?: continue
+            if (!isGamePathValid(path, game.platformSlug)) {
+                gameDao.clearLocalPath(game.id)
+                invalidated++
+                Log.d(TAG, "Invalidated (platform): ${game.title}")
+            }
+        }
+        invalidated
+    }
+
+    suspend fun discoverLocalFilesForPlatform(platformId: Long): Int = withContext(Dispatchers.IO) {
+        if (!isStorageReady()) return@withContext 0
+
+        val games = gameDao.getGamesWithRommIdButNoPathByPlatform(platformId)
+        if (games.isEmpty()) return@withContext 0
+
+        val gamesByPlatform = games.groupBy { it.platformSlug }
+        var discovered = 0
+
+        for ((platformSlug, platformGames) in gamesByPlatform) {
+            val platformDir = getDownloadDir(platformSlug)
+            if (!platformDir.exists()) continue
+
+            val allEntries = platformDir.listFiles() ?: continue
+            val files = allEntries.filter { it.isFile && !it.name.endsWith(".tmp") }
+            val folders = allEntries.filter { it.isDirectory }
+
+            for (game in platformGames) {
+                val fileMatch = files.find { file -> titlesMatch(file.nameWithoutExtension, game.title) }
+                if (fileMatch != null) {
+                    gameDao.updateLocalPath(game.id, fileMatch.absolutePath, GameSource.ROMM_SYNCED)
+                    discovered++
+                    continue
+                }
+
+                val folderMatch = folders.find { folder -> titlesMatch(folder.name, game.title) }
+                if (folderMatch != null) {
+                    val primaryRom = findPrimaryRomInFolder(folderMatch, game.platformSlug)
+                    if (primaryRom != null) {
+                        gameDao.updateLocalPath(game.id, primaryRom.absolutePath, GameSource.ROMM_SYNCED)
+                        discovered++
+                    }
+                }
+            }
+        }
+        discovered
+    }
+
+    suspend fun validateDiscLocalFiles(platformId: Long): Int = withContext(Dispatchers.IO) {
+        val discs = gameDiscDao.getDiscsWithLocalPathByPlatform(platformId)
+        var invalidated = 0
+        for (disc in discs) {
+            val path = disc.localPath ?: continue
+            if (!File(path).exists()) {
+                gameDiscDao.clearLocalPath(disc.id)
+                invalidated++
+            }
+        }
+        invalidated
+    }
+
+    suspend fun validateFileLocalFiles(platformId: Long): Int = withContext(Dispatchers.IO) {
+        val files = gameFileDao.getFilesWithLocalPathByPlatform(platformId)
+        var invalidated = 0
+        for (file in files) {
+            val path = file.localPath ?: continue
+            if (!File(path).exists()) {
+                gameFileDao.clearLocalPath(file.id)
+                invalidated++
+            }
+        }
+        invalidated
+    }
+
+    suspend fun ensureImagePathValid(gameId: Long): GameEntity? = withContext(Dispatchers.IO) {
+        val game = gameDao.getById(gameId) ?: return@withContext null
+        var changed = false
+
+        if (game.coverPath?.startsWith("/") == true && !File(game.coverPath).exists()) {
+            gameDao.clearCoverPath(gameId)
+            changed = true
+        }
+        if (game.backgroundPath?.startsWith("/") == true && !File(game.backgroundPath).exists()) {
+            gameDao.clearBackgroundPath(gameId)
+            changed = true
+        }
+
+        if (changed) gameDao.getById(gameId) else game
     }
 
     // --- Direct DAO delegations ---

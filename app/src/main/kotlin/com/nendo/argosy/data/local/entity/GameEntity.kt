@@ -106,7 +106,9 @@ data class GameEntity(
 
     val romHash: String? = null,
 
-    val fileSizeBytes: Long? = null
+    val fileSizeBytes: Long? = null,
+
+    val syncDirty: Boolean = false
 )
 
 data class GameListItem(

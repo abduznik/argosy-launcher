@@ -58,4 +58,14 @@ interface GameDiscDao {
 
     @Query("DELETE FROM game_discs WHERE gameId = :gameId AND rommId NOT IN (:validRommIds)")
     suspend fun deleteInvalidDiscs(gameId: Long, validRommIds: List<Long>)
+
+    @Query("""
+        SELECT gd.* FROM game_discs gd
+        INNER JOIN games g ON gd.gameId = g.id
+        WHERE g.platformId = :platformId AND gd.localPath IS NOT NULL
+    """)
+    suspend fun getDiscsWithLocalPathByPlatform(platformId: Long): List<GameDiscEntity>
+
+    @Query("UPDATE game_discs SET localPath = NULL WHERE id = :discId")
+    suspend fun clearLocalPath(discId: Long)
 }

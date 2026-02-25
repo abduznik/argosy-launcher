@@ -68,6 +68,10 @@ class RomMLibrarySyncService @Inject constructor(
     private val _syncProgress = MutableStateFlow(SyncProgress())
     val syncProgress: StateFlow<SyncProgress> = _syncProgress.asStateFlow()
 
+    companion object {
+        private val ROMM_SOURCES = listOf(GameSource.ROMM_REMOTE, GameSource.ROMM_SYNCED)
+    }
+
     suspend fun populateVirtualCollectionsIfNeeded() {
         val genreCount = collectionDao.countByType(CollectionType.GENRE)
         val gameModeCount = collectionDao.countByType(CollectionType.GAME_MODE)
@@ -150,17 +154,13 @@ class RomMLibrarySyncService @Inject constructor(
 
             _syncProgress.value = _syncProgress.value.copy(currentPlatform = platform.name)
 
+            gameDao.markSyncDirty(platform.id, ROMM_SOURCES)
+
             val result = syncPlatformRoms(currentApi, platform, filters)
 
-            consolidateMultiDiscGames(currentApi, result.multiDiscGroups)
+            val gamesDeleted = processPostPlatformSync(currentApi, platform.id, result, filters)
 
-            var gamesDeleted = 0
-            if (filters.deleteOrphans) {
-                gamesDeleted = deleteOrphanedGamesForPlatform(platform.id, result.seenIds)
-            }
-
-            val count = gameDao.countByPlatform(platform.id)
-            platformDao.updateGameCount(platform.id, count)
+            gameDao.clearAllSyncDirty()
 
             syncVirtualCollectionsUseCase.get()()
 
@@ -172,29 +172,37 @@ class RomMLibrarySyncService @Inject constructor(
         }
     }
 
-    private suspend fun deleteOrphanedGamesForPlatform(platformId: Long, seenRommIds: Set<Long>): Int {
-        var deleted = 0
+    private suspend fun processPostPlatformSync(
+        api: RomMApi,
+        platformId: Long,
+        result: PlatformSyncResult,
+        filters: SyncFilterPreferences
+    ): Int {
+        var gamesDeleted = 0
 
-        val remoteGames = gameDao.getBySource(GameSource.ROMM_REMOTE).filter { it.platformId == platformId }
-        for (game in remoteGames) {
-            val rommId = game.rommId ?: continue
-            if (rommId !in seenRommIds) {
-                gameDao.delete(game.id)
-                deleted++
-            }
-        }
+        consolidateMultiDiscGames(api, result.multiDiscGroups)
 
-        val syncedGames = gameDao.getBySource(GameSource.ROMM_SYNCED).filter { it.platformId == platformId }
-        for (game in syncedGames) {
-            val rommId = game.rommId ?: continue
-            if (rommId !in seenRommIds) {
+        gamesDeleted += cleanupInvalidExtensionGames(platformId)
+        gamesDeleted += cleanupDuplicateGames(platformId)
+
+        if (filters.deleteOrphans && result.error == null) {
+            val dirtyGames = gameDao.getSyncDirtyGames(platformId, ROMM_SOURCES)
+            for (game in dirtyGames) {
                 game.localPath?.let { safeDeleteFile(it) }
                 gameDao.delete(game.id)
-                deleted++
+                gamesDeleted++
             }
         }
 
-        return deleted
+        gameRepository.get().validateLocalFilesForPlatform(platformId)
+        gameRepository.get().discoverLocalFilesForPlatform(platformId)
+        gameRepository.get().validateDiscLocalFiles(platformId)
+        gameRepository.get().validateFileLocalFiles(platformId)
+
+        val count = gameDao.countByPlatform(platformId)
+        platformDao.updateGameCount(platformId, count)
+
+        return gamesDeleted
     }
 
     private suspend fun doSyncLibrary(
@@ -209,8 +217,6 @@ class RomMLibrarySyncService @Inject constructor(
 
         val prefs = userPreferencesRepository.preferences.first()
         val filters = prefs.syncFilters
-        val seenRommIds = mutableSetOf<Long>()
-        val allMultiDiscGroups = mutableListOf<MultiDiscGroup>()
 
         _syncProgress.value = SyncProgress(isSyncing = true)
 
@@ -249,30 +255,21 @@ class RomMLibrarySyncService @Inject constructor(
                     platformsDone = index
                 )
 
+                gameDao.markSyncDirty(platform.id, ROMM_SOURCES)
+
                 val result = syncPlatformRoms(currentApi, platform, filters)
                 gamesAdded += result.added
                 gamesUpdated += result.updated
-                seenRommIds.addAll(result.seenIds)
-                allMultiDiscGroups.addAll(result.multiDiscGroups)
                 result.error?.let { errors.add(it) }
+
+                gamesDeleted += processPostPlatformSync(currentApi, platform.id, result, filters)
 
                 platformsSynced++
             }
 
-            consolidateMultiDiscGames(currentApi, allMultiDiscGroups)
+            gameDao.clearAllSyncDirty()
 
-            gamesDeleted += cleanupInvalidExtensionGames()
-            gamesDeleted += cleanupDuplicateGames()
             cleanupLegacyPlatforms(platforms)
-
-            platforms.forEach { platform ->
-                val count = gameDao.countByPlatform(platform.id)
-                platformDao.updateGameCount(platform.id, count)
-            }
-
-            if (filters.deleteOrphans) {
-                gamesDeleted += deleteOrphanedGames(seenRommIds)
-            }
 
             userPreferencesRepository.setLastRommSyncTime(Instant.now())
 
@@ -509,7 +506,6 @@ class RomMLibrarySyncService @Inject constructor(
     private data class PlatformSyncResult(
         val added: Int,
         val updated: Int,
-        val seenIds: Set<Long>,
         val multiDiscGroups: List<MultiDiscGroup>,
         val error: String? = null
     )
@@ -521,9 +517,7 @@ class RomMLibrarySyncService @Inject constructor(
     ): PlatformSyncResult {
         var added = 0
         var updated = 0
-        val seenRommIds = mutableSetOf<Long>()
-        val seenDedupKeys = mutableMapOf<String, Long>()
-        val romsWithRA = mutableSetOf<Long>()
+        val seenDedupKeys = mutableSetOf<String>()
         val multiDiscGroups = mutableListOf<MultiDiscGroup>()
         val processedDiscIds = mutableSetOf<Long>()
         val skipIndividualDiscIds = mutableSetOf<Long>()
@@ -540,7 +534,7 @@ class RomMLibrarySyncService @Inject constructor(
             )
 
             if (!romsResponse.isSuccessful) {
-                return PlatformSyncResult(added, updated, seenRommIds, multiDiscGroups,
+                return PlatformSyncResult(added, updated, multiDiscGroups,
                     "Failed to fetch ROMs for ${platform.name}: ${romsResponse.code()}")
             }
 
@@ -578,30 +572,9 @@ class RomMLibrarySyncService @Inject constructor(
                 }
 
                 val dedupKey = RomMUtils.getDedupKey(rom)
-                val hasRA = rom.raId != null || rom.raMetadata?.achievements?.isNotEmpty() == true
-
                 if (dedupKey != null) {
-                    val existingRomId = seenDedupKeys[dedupKey]
-                    if (existingRomId != null) {
-                        val existingHasRA = romsWithRA.contains(existingRomId)
-                        if (!existingHasRA && hasRA) {
-                            seenRommIds.remove(existingRomId)
-                            romsWithRA.remove(existingRomId)
-                            seenDedupKeys[dedupKey] = rom.id
-                            seenRommIds.add(rom.id)
-                            if (hasRA) romsWithRA.add(rom.id)
-                            try {
-                                syncRom(rom)
-                                updated++
-                            } catch (_: Exception) {}
-                        }
-                        continue
-                    }
-                    seenDedupKeys[dedupKey] = rom.id
+                    if (!seenDedupKeys.add(dedupKey)) continue
                 }
-
-                seenRommIds.add(rom.id)
-                if (hasRA) romsWithRA.add(rom.id)
 
                 try {
                     val (isNew, _) = syncRom(rom)
@@ -614,7 +587,6 @@ class RomMLibrarySyncService @Inject constructor(
 
                         processedDiscIds.add(rom.id)
                         processedDiscIds.addAll(siblingIds)
-                        seenRommIds.addAll(siblingIds)
 
                         multiDiscGroups.add(MultiDiscGroup(
                             primaryRommId = rom.id,
@@ -631,7 +603,7 @@ class RomMLibrarySyncService @Inject constructor(
             offset += SYNC_PAGE_SIZE
         }
 
-        return PlatformSyncResult(added, updated, seenRommIds, multiDiscGroups)
+        return PlatformSyncResult(added, updated, multiDiscGroups)
     }
 
     private suspend fun consolidateMultiDiscGames(
@@ -747,11 +719,11 @@ class RomMLibrarySyncService @Inject constructor(
         }
     }
 
-    private suspend fun cleanupInvalidExtensionGames(): Int {
+    private suspend fun cleanupInvalidExtensionGames(platformId: Long): Int {
         var deleted = 0
-        val allGames = gameDao.getBySource(GameSource.ROMM_REMOTE) + gameDao.getBySource(GameSource.ROMM_SYNCED)
+        val platformGames = gameDao.getBySources(ROMM_SOURCES, platformId)
 
-        for (game in allGames) {
+        for (game in platformGames) {
             val localPath = game.localPath ?: continue
             val extension = localPath.substringAfterLast('.', "").lowercase()
             if (extension.isEmpty()) continue
@@ -768,16 +740,16 @@ class RomMLibrarySyncService @Inject constructor(
         return deleted
     }
 
-    private suspend fun cleanupDuplicateGames(): Int {
+    private suspend fun cleanupDuplicateGames(platformId: Long): Int {
         var deleted = 0
-        val allGames = gameDao.getBySource(GameSource.ROMM_REMOTE) + gameDao.getBySource(GameSource.ROMM_SYNCED)
+        val platformGames = gameDao.getBySources(ROMM_SOURCES, platformId)
         val deletedIds = mutableSetOf<Long>()
 
-        val gamesByPlatformAndIgdb = allGames
+        val gamesByIgdb = platformGames
             .filter { it.igdbId != null }
-            .groupBy { "${it.platformId}:${it.igdbId}" }
+            .groupBy { it.igdbId }
 
-        for ((_, duplicates) in gamesByPlatformAndIgdb) {
+        for ((_, duplicates) in gamesByIgdb) {
             if (duplicates.size <= 1) continue
 
             val sorted = duplicates.sortedWith(
@@ -794,11 +766,11 @@ class RomMLibrarySyncService @Inject constructor(
             }
         }
 
-        val remainingGames = allGames.filter { it.id !in deletedIds }
-        val gamesByPlatformAndTitle = remainingGames
-            .groupBy { "${it.platformId}:${it.title.lowercase()}" }
+        val remainingGames = platformGames.filter { it.id !in deletedIds }
+        val gamesByTitle = remainingGames
+            .groupBy { it.title.lowercase() }
 
-        for ((_, duplicates) in gamesByPlatformAndTitle) {
+        for ((_, duplicates) in gamesByTitle) {
             if (duplicates.size <= 1) continue
 
             val sorted = duplicates.sortedWith(
@@ -919,38 +891,6 @@ class RomMLibrarySyncService @Inject constructor(
             }
         }
         return migrated
-    }
-
-    private suspend fun deleteOrphanedGames(seenRommIds: Set<Long>): Int {
-        var deleted = 0
-
-        val disabledPlatforms = platformDao.observeAllPlatforms().first()
-            .filter { !it.syncEnabled }
-            .map { it.id }
-            .toSet()
-
-        val remoteGames = gameDao.getBySource(GameSource.ROMM_REMOTE)
-        for (game in remoteGames) {
-            if (game.platformId in disabledPlatforms) continue
-            val rommId = game.rommId ?: continue
-            if (rommId !in seenRommIds) {
-                gameDao.delete(game.id)
-                deleted++
-            }
-        }
-
-        val syncedGames = gameDao.getBySource(GameSource.ROMM_SYNCED)
-        for (game in syncedGames) {
-            if (game.platformId in disabledPlatforms) continue
-            val rommId = game.rommId ?: continue
-            if (rommId !in seenRommIds) {
-                game.localPath?.let { safeDeleteFile(it) }
-                gameDao.delete(game.id)
-                deleted++
-            }
-        }
-
-        return deleted
     }
 
     private suspend fun safeDeleteFile(path: String) {
