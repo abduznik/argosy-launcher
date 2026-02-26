@@ -175,6 +175,7 @@ class DualHomeViewModel(
     val forwardingMode: StateFlow<ForwardingMode> = _forwardingMode.asStateFlow()
 
     private var allLibraryGames: List<HomeGameUi> = emptyList()
+    private var latestDownloads: Map<Long, com.nendo.argosy.data.local.entity.DownloadQueueEntity> = emptyMap()
     private val pendingCoverRepairs = mutableSetOf<Long>()
     private var letterOverlayJob: kotlinx.coroutines.Job? = null
 
@@ -208,6 +209,7 @@ class DualHomeViewModel(
                 val downloadsByGameId = entities.associateBy { it.gameId }
                 val currentlyDownloading = downloadsByGameId.keys
 
+                latestDownloads = downloadsByGameId
                 val completedDownloads = previouslyDownloading - currentlyDownloading
                 previouslyDownloading = currentlyDownloading
 
@@ -244,6 +246,11 @@ class DualHomeViewModel(
                 }
             }
         }
+    }
+
+    private fun List<HomeGameUi>.withCurrentDownloadState(): List<HomeGameUi> {
+        if (latestDownloads.isEmpty()) return this
+        return map { it.copy(downloadIndicator = indicatorForGame(it.id, latestDownloads)) }
     }
 
     private fun indicatorForGame(
@@ -1001,7 +1008,7 @@ class DualHomeViewModel(
             val filtered = applyFiltersToList(allGames, filters)
             val result = applySort(filtered, filters.sort)
             _uiState.update { it.copy(
-                libraryGames = result.games,
+                libraryGames = result.games.withCurrentDownloadState(),
                 libraryGridItems = result.gridItems,
                 sectionLabels = result.labels,
                 currentSectionLabel = result.labels.firstOrNull() ?: "",
@@ -1020,7 +1027,7 @@ class DualHomeViewModel(
             val filtered = applyFiltersToList(platformGames, filters)
             val result = applySort(filtered, filters.sort)
             _uiState.update { it.copy(
-                libraryGames = result.games,
+                libraryGames = result.games.withCurrentDownloadState(),
                 libraryGridItems = result.gridItems,
                 sectionLabels = result.labels,
                 currentSectionLabel = result.labels.firstOrNull() ?: "",
