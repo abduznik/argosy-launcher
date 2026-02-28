@@ -48,6 +48,7 @@ class SaveChannelDelegate @Inject constructor(
 
     private var currentGameId: Long = 0
     private var _rawEntries: List<UnifiedSaveEntry> = emptyList()
+    private var _pendingSaveStatusChanged: ((SaveStatusEvent) -> Unit)? = null
 
     fun show(
         scope: CoroutineScope,
@@ -175,6 +176,18 @@ class SaveChannelDelegate @Inject constructor(
                     )
                 )
             }
+        }
+
+        if (activeChannel != null && slotItems.none { it.channelName == activeChannel }) {
+            slotItems.add(
+                SaveSlotItem(
+                    channelName = activeChannel,
+                    displayName = activeChannel,
+                    isActive = true,
+                    saveCount = 0,
+                    latestTimestamp = null
+                )
+            )
         }
 
         slotItems.add(
@@ -389,6 +402,7 @@ class SaveChannelDelegate @Inject constructor(
                     SaveFocusColumn.SLOTS -> {
                         val slot = state.focusedSlot ?: return
                         if (slot.isCreateAction) {
+                            _pendingSaveStatusChanged = onSaveStatusChanged
                             _state.update {
                                 it.copy(
                                     showRenameDialog = true,
@@ -657,6 +671,7 @@ class SaveChannelDelegate @Inject constructor(
     }
 
     fun dismissRenameDialog() {
+        _pendingSaveStatusChanged = null
         _state.update {
             it.copy(
                 showRenameDialog = false,
@@ -694,30 +709,31 @@ class SaveChannelDelegate @Inject constructor(
 
     private fun confirmCreateNewSlot(scope: CoroutineScope, name: String) {
         scope.launch {
-            val autoSave = _rawEntries
-                .filter { it.channelName == null }
-                .maxByOrNull { it.timestamp }
+            val game = gameRepository.getById(currentGameId) ?: return@launch
+            val emulatorId = _state.value.emulatorId
 
-            val success = if (autoSave?.localCacheId != null) {
-                saveCacheManager.copyToChannel(autoSave.localCacheId, name) != null
-            } else {
-                false
+            gameRepository.updateActiveSaveChannel(currentGameId, name)
+            gameRepository.updateActiveSaveTimestamp(currentGameId, null)
+
+            if (emulatorId != null) {
+                restoreCachedSaveUseCase.clearActiveSave(currentGameId, emulatorId)
             }
 
-            if (success) {
-                refreshEntries()
-                _state.update {
-                    it.copy(
-                        showRenameDialog = false,
-                        renameEntry = null,
-                        renameText = ""
-                    )
-                }
-                notificationManager.showSuccess("Created save slot '$name'")
-                scope.launch { syncCoordinator.processQueue() }
-            } else {
-                notificationManager.showError("Failed to create save slot")
+            _state.update {
+                it.copy(
+                    showRenameDialog = false,
+                    renameEntry = null,
+                    renameText = "",
+                    activeChannel = name,
+                    activeSaveTimestamp = null
+                )
             }
+            refreshEntries()
+            _pendingSaveStatusChanged?.invoke(
+                SaveStatusEvent(channelName = name, timestamp = null)
+            )
+            _pendingSaveStatusChanged = null
+            notificationManager.showSuccess("Created save slot '$name'")
         }
     }
 

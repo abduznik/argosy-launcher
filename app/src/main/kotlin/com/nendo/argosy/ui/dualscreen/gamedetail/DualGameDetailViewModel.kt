@@ -411,6 +411,18 @@ class DualGameDetailViewModel(
                 )
             }
 
+        if (activeChannel != null && slotItems.none { it.channelName == activeChannel }) {
+            slotItems.add(
+                SaveSlotItem(
+                    channelName = activeChannel,
+                    displayName = activeChannel,
+                    isActive = true,
+                    saveCount = 0,
+                    latestTimestamp = null
+                )
+            )
+        }
+
         slotItems.add(
             SaveSlotItem(
                 channelName = null,

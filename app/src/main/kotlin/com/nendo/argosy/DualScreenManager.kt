@@ -1163,8 +1163,18 @@ class DualScreenManager(
 
     private fun handleCreateSlot(gameId: Long, name: String) {
         scope.launch(Dispatchers.IO) {
+            val game = gameDao.getById(gameId) ?: return@launch
+            val emulatorId = emulatorResolver.getEmulatorIdForGame(
+                gameId, game.platformId, game.platformSlug
+            )
+
             gameDao.updateActiveSaveChannel(gameId, name)
             gameDao.updateActiveSaveTimestamp(gameId, null)
+
+            if (emulatorId != null) {
+                restoreCachedSaveUseCase.clearActiveSave(gameId, emulatorId)
+            }
+
             broadcastSaveActionResult("SAVE_CREATE_DONE", gameId)
             broadcastUnifiedSaves(gameId)
         }
