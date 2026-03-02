@@ -40,6 +40,11 @@ class LaunchViewModel @Inject constructor(
     val launchIntent: StateFlow<Intent?> = _launchIntent.asStateFlow()
 
     private var hasLaunchedEmulator = false
+        private set
+
+    fun resetLaunchState() {
+        hasLaunchedEmulator = false
+    }
 
     private val _launchOptions = MutableStateFlow<Bundle?>(null)
     val launchOptions: StateFlow<Bundle?> = _launchOptions.asStateFlow()
