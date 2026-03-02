@@ -575,7 +575,7 @@ class GameLauncher @Inject constructor(
         platformSlug: String,
         config: LaunchConfig.Custom,
         forResume: Boolean
-    ): Intent {
+    ): Intent? {
         val needsUriPermission = config.intentExtras.values.any { it is ExtraValue.FileUri }
 
         if (needsUriPermission) {
@@ -625,7 +625,11 @@ class GameLauncher @Inject constructor(
                         is ExtraValue.FilePath -> putExtra(key, romFile.absolutePath)
                         is ExtraValue.DocumentUri -> {
                             val docUri = getDocumentUri(romFile)
-                            if (docUri != null) putExtra(key, docUri.toString()) else Unit
+                            if (docUri == null) {
+                                Logger.error(TAG, "Cannot build document URI for ${romFile.absolutePath} — game cannot be launched")
+                                return null
+                            }
+                            putExtra(key, docUri.toString())
                         }
                         is ExtraValue.FileUri -> {
                             hasFileUri = true
@@ -861,7 +865,11 @@ class GameLauncher @Inject constructor(
                 Logger.warn(TAG, "Cannot build document URI for non-documentable path: ${file.absolutePath}")
                 return null
             }
-        val parentRelative = relativePath.substringBeforeLast("/", relativePath)
+        val parentRelative = if (relativePath.contains("/")) {
+            relativePath.substringBeforeLast("/")
+        } else {
+            ""
+        }
         val treeUri = DocumentsContract.buildTreeDocumentUri(
             "com.android.externalstorage.documents",
             "$volumeId:$parentRelative"
