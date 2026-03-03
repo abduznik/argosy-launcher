@@ -276,8 +276,15 @@ class SocialViewModel @Inject constructor(
             }
         }
 
-        override fun onLeft(): InputResult = InputResult.UNHANDLED
-        override fun onRight(): InputResult = InputResult.UNHANDLED
+        override fun onLeft(): InputResult {
+            if (anyModalShowing()) return InputResult.UNHANDLED
+            return if (switchTab(-1)) InputResult.HANDLED else InputResult.UNHANDLED
+        }
+
+        override fun onRight(): InputResult {
+            if (anyModalShowing()) return InputResult.UNHANDLED
+            return if (switchTab(1)) InputResult.HANDLED else InputResult.UNHANDLED
+        }
 
         override fun onConfirm(): InputResult {
             val delegateState = feedOptionsDelegate.state.value

@@ -4,17 +4,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -29,10 +28,28 @@ import androidx.compose.ui.unit.dp
 import com.nendo.argosy.data.social.SocialUser
 import com.nendo.argosy.ui.components.SwitchPreference
 
+private const val ITEM_ACCOUNT_CARD = 0
+private const val ITEM_PRIVACY_HEADER = 1
+private const val ITEM_ONLINE_STATUS = 2
+private const val ITEM_NOW_PLAYING = 3
+private const val ITEM_NOTIFICATIONS_HEADER = 4
+private const val ITEM_FRIEND_ONLINE = 5
+private const val ITEM_FRIEND_PLAYING = 6
+private const val ITEM_COUNT = 7
+
+fun profileFocusToItemIndex(focusIndex: Int): Int = when (focusIndex) {
+    0 -> ITEM_ONLINE_STATUS
+    1 -> ITEM_NOW_PLAYING
+    2 -> ITEM_FRIEND_ONLINE
+    3 -> ITEM_FRIEND_PLAYING
+    else -> ITEM_ONLINE_STATUS
+}
+
 @Composable
 fun ProfileTabContent(
     user: SocialUser?,
     focusIndex: Int,
+    listState: LazyListState,
     onlineStatus: Boolean,
     showNowPlaying: Boolean,
     notifyFriendOnline: Boolean,
@@ -56,54 +73,57 @@ fun ProfileTabContent(
         return
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
     ) {
-        AccountInfoCard(user = user)
+        item { AccountInfoCard(user = user) }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        item { SectionHeader("PRIVACY") }
 
-        SectionHeader("PRIVACY")
+        item {
+            SwitchPreference(
+                title = "Online Status",
+                subtitle = "Show when you are online",
+                isEnabled = onlineStatus,
+                isFocused = focusIndex == 0,
+                onToggle = { onToggleOnlineStatus(!onlineStatus) }
+            )
+        }
 
-        SwitchPreference(
-            title = "Online Status",
-            subtitle = "Show when you are online",
-            isEnabled = onlineStatus,
-            isFocused = focusIndex == 0,
-            onToggle = { onToggleOnlineStatus(!onlineStatus) }
-        )
+        item {
+            SwitchPreference(
+                title = "Show Now Playing",
+                subtitle = "Share what you are currently playing",
+                isEnabled = showNowPlaying,
+                isFocused = focusIndex == 1,
+                onToggle = { onToggleShowNowPlaying(!showNowPlaying) }
+            )
+        }
 
-        SwitchPreference(
-            title = "Show Now Playing",
-            subtitle = "Share what you are currently playing",
-            isEnabled = showNowPlaying,
-            isFocused = focusIndex == 1,
-            onToggle = { onToggleShowNowPlaying(!showNowPlaying) }
-        )
+        item { SectionHeader("NOTIFICATIONS") }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        item {
+            SwitchPreference(
+                title = "Friend Online",
+                subtitle = "Notify when a friend comes online",
+                isEnabled = notifyFriendOnline,
+                isFocused = focusIndex == 2,
+                onToggle = { onToggleNotifyFriendOnline(!notifyFriendOnline) }
+            )
+        }
 
-        SectionHeader("NOTIFICATIONS")
-
-        SwitchPreference(
-            title = "Friend Online",
-            subtitle = "Notify when a friend comes online",
-            isEnabled = notifyFriendOnline,
-            isFocused = focusIndex == 2,
-            onToggle = { onToggleNotifyFriendOnline(!notifyFriendOnline) }
-        )
-
-        SwitchPreference(
-            title = "Friend Playing",
-            subtitle = "Notify when a friend starts a game",
-            isEnabled = notifyFriendPlaying,
-            isFocused = focusIndex == 3,
-            onToggle = { onToggleNotifyFriendPlaying(!notifyFriendPlaying) }
-        )
+        item {
+            SwitchPreference(
+                title = "Friend Playing",
+                subtitle = "Notify when a friend starts a game",
+                isEnabled = notifyFriendPlaying,
+                isFocused = focusIndex == 3,
+                onToggle = { onToggleNotifyFriendPlaying(!notifyFriendPlaying) }
+            )
+        }
     }
 }
 

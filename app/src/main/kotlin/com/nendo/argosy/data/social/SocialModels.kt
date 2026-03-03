@@ -166,6 +166,8 @@ object MessageTypes {
     const val REQUEST_GAME_DATA = "request_game_data"
     const val GAME_DATA = "game_data"
     const val CREATE_DOODLE = "create_doodle"
+    const val GET_EVENT_COMMENTS = "get_event_comments"
+    const val EVENT_COMMENTS = "event_comments"
 
     // Initial state provisioning (received after auth_success)
     const val FRIENDS_DATA = "friends"
@@ -232,7 +234,8 @@ data class FeedEventDto(
     val hidden: Boolean = false,
     @Json(name = "like_count") val likeCount: Int = 0,
     @Json(name = "comment_count") val commentCount: Int = 0,
-    @Json(name = "is_liked_by_me") val isLikedByMe: Boolean = false
+    @Json(name = "is_liked_by_me") val isLikedByMe: Boolean = false,
+    val comments: List<FeedComment> = emptyList()
 ) {
     val eventType: FeedEventType?
         get() = FeedEventType.fromValue(type)

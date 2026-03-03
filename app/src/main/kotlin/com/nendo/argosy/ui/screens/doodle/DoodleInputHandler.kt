@@ -6,7 +6,7 @@ import com.nendo.argosy.ui.input.InputResult
 class DoodleInputHandler(
     private val viewModel: DoodleViewModel,
     private val onOpenKeyboard: () -> Unit,
-    private val onBack: () -> Unit
+    private val onNavigateBack: () -> Unit
 ) : InputHandler {
 
     override fun onUp(): InputResult {
@@ -106,12 +106,16 @@ class DoodleInputHandler(
                 val shouldDiscard = viewModel.confirmDiscardDialogSelection()
                 viewModel.hideDiscardDialog()
                 if (shouldDiscard) {
-                    onBack()
+                    onNavigateBack()
                 }
                 InputResult.HANDLED
             }
             state.currentSection == DoodleSection.CANVAS -> {
-                viewModel.drawAtCursor()
+                if (state.isDrawing) {
+                    viewModel.stopDrawing()
+                } else {
+                    viewModel.drawAtCursor()
+                }
                 InputResult.HANDLED
             }
             state.currentSection == DoodleSection.PALETTE -> {
@@ -141,8 +145,8 @@ class DoodleInputHandler(
                 viewModel.hideDiscardDialog()
                 InputResult.HANDLED
             }
-            state.currentSection != DoodleSection.CANVAS -> {
-                viewModel.setSection(DoodleSection.CANVAS)
+            state.isDrawing -> {
+                viewModel.cancelDrawing()
                 InputResult.HANDLED
             }
             state.hasContent -> {
@@ -150,7 +154,7 @@ class DoodleInputHandler(
                 InputResult.HANDLED
             }
             else -> {
-                onBack()
+                onNavigateBack()
                 InputResult.HANDLED
             }
         }

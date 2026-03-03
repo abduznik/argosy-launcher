@@ -20,15 +20,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FormatColorFill
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -53,7 +55,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.nendo.argosy.ui.components.FooterBar
 import com.nendo.argosy.ui.components.InputButton
+import com.nendo.argosy.ui.components.Modal
 import com.nendo.argosy.ui.input.LocalInputDispatcher
+import com.nendo.argosy.ui.screens.gamedetail.components.OptionItem
 
 @Composable
 fun DoodleScreen(
@@ -70,7 +74,7 @@ fun DoodleScreen(
         DoodleInputHandler(
             viewModel = viewModel,
             onOpenKeyboard = { openKeyboard = true },
-            onBack = onBack
+            onNavigateBack = onBack
         )
     }
 
@@ -232,7 +236,12 @@ private fun LandscapeLayout(
             }
         }
 
-        DoodleFooter(currentSection = uiState.currentSection)
+        DoodleFooter(
+            currentSection = uiState.currentSection,
+            selectedTool = uiState.selectedTool,
+            isDrawing = uiState.isDrawing,
+            hasContent = uiState.hasContent
+        )
     }
 }
 
@@ -325,7 +334,12 @@ private fun PortraitLayout(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        DoodleFooter(currentSection = uiState.currentSection)
+        DoodleFooter(
+            currentSection = uiState.currentSection,
+            selectedTool = uiState.selectedTool,
+            isDrawing = uiState.isDrawing,
+            hasContent = uiState.hasContent
+        )
     }
 }
 
@@ -350,14 +364,19 @@ private fun ToolSelector(
                     .clickable { onToolSelect() },
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = when (tool) {
-                        DoodleTool.PEN -> "P"
-                        DoodleTool.LINE -> "L"
-                        DoodleTool.FILL -> "F"
+                Icon(
+                    imageVector = when (tool) {
+                        DoodleTool.PEN -> Icons.Default.Edit
+                        DoodleTool.LINE -> Icons.Default.Timeline
+                        DoodleTool.FILL -> Icons.Default.FormatColorFill
                     },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                    contentDescription = when (tool) {
+                        DoodleTool.PEN -> "Pen"
+                        DoodleTool.LINE -> "Line"
+                        DoodleTool.FILL -> "Fill"
+                    },
+                    modifier = Modifier.size(18.dp),
+                    tint = if (isSelected) MaterialTheme.colorScheme.onPrimary
                     else MaterialTheme.colorScheme.onSurface
                 )
             }
@@ -561,14 +580,25 @@ private fun ZoomIndicator(zoomLevel: ZoomLevel) {
 }
 
 @Composable
-private fun DoodleFooter(currentSection: DoodleSection) {
+private fun DoodleFooter(
+    currentSection: DoodleSection,
+    selectedTool: DoodleTool,
+    isDrawing: Boolean,
+    hasContent: Boolean
+) {
     val hints = buildList {
-        add(InputButton.LB_RB to "Section")
         when (currentSection) {
             DoodleSection.CANVAS -> {
                 add(InputButton.DPAD to "Move")
-                add(InputButton.A to "Draw")
-                add(InputButton.X to "Tool")
+                val drawLabel = when {
+                    selectedTool == DoodleTool.LINE && isDrawing -> "End"
+                    isDrawing -> "Stop"
+                    selectedTool == DoodleTool.LINE -> "Start"
+                    selectedTool == DoodleTool.FILL -> "Fill"
+                    else -> "Draw"
+                }
+                add(InputButton.A to drawLabel)
+                add(InputButton.Y to "Tool")
             }
             DoodleSection.PALETTE -> {
                 add(InputButton.DPAD to "Select")
@@ -583,7 +613,12 @@ private fun DoodleFooter(currentSection: DoodleSection) {
             }
         }
         add(InputButton.START to "Post")
-        add(InputButton.B to "Back")
+        val backLabel = when {
+            isDrawing -> "Cancel"
+            hasContent -> "Discard"
+            else -> "Back"
+        }
+        add(InputButton.B to backLabel)
     }
 
     FooterBar(hints = hints)
@@ -596,48 +631,41 @@ private fun PostMenuDialog(
     onPost: () -> Unit,
     onCancel: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = { if (!isPosting) onCancel() },
-        title = {
+    Modal(title = "Post Doodle") {
+        if (isPosting) {
+            Row(
+                modifier = Modifier.padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                Text(
+                    text = "Posting...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        } else {
             Text(
-                text = "Post Doodle",
-                style = MaterialTheme.typography.titleLarge
+                text = "Share your doodle with friends?",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
             )
-        },
-        text = {
-            if (isPosting) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    Text("Posting...")
-                }
-            } else {
-                Text("Share your doodle with friends?")
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onPost,
-                enabled = !isPosting,
-                colors = if (focusIndex == 0) ButtonDefaults.buttonColors()
-                else ButtonDefaults.outlinedButtonColors()
-            ) {
-                Text("Post")
-            }
-        },
-        dismissButton = {
-            OutlinedButton(
-                onClick = onCancel,
-                enabled = !isPosting,
-                colors = if (focusIndex == 1) ButtonDefaults.buttonColors()
-                else ButtonDefaults.outlinedButtonColors()
-            ) {
-                Text("Cancel")
-            }
+            OptionItem(
+                icon = Icons.Default.Send,
+                label = "Post",
+                isFocused = focusIndex == 0,
+                onClick = onPost
+            )
+            OptionItem(
+                icon = Icons.Default.Close,
+                label = "Cancel",
+                isFocused = focusIndex == 1,
+                onClick = onCancel
+            )
         }
-    )
+    }
 }
 
 @Composable
@@ -646,36 +674,25 @@ private fun DiscardDialog(
     onDiscard: () -> Unit,
     onCancel: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = {
-            Text(
-                text = "Discard Doodle?",
-                style = MaterialTheme.typography.titleLarge
-            )
-        },
-        text = {
-            Text("You have unsaved changes. Are you sure you want to discard your doodle?")
-        },
-        confirmButton = {
-            Button(
-                onClick = onDiscard,
-                colors = if (focusIndex == 0) ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error
-                )
-                else ButtonDefaults.outlinedButtonColors()
-            ) {
-                Text("Discard")
-            }
-        },
-        dismissButton = {
-            OutlinedButton(
-                onClick = onCancel,
-                colors = if (focusIndex == 1) ButtonDefaults.buttonColors()
-                else ButtonDefaults.outlinedButtonColors()
-            ) {
-                Text("Keep Editing")
-            }
-        }
-    )
+    Modal(title = "Discard Doodle?") {
+        Text(
+            text = "You have unsaved changes. Are you sure you want to discard your doodle?",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        OptionItem(
+            icon = Icons.Default.Delete,
+            label = "Discard",
+            isFocused = focusIndex == 0,
+            isDangerous = true,
+            onClick = onDiscard
+        )
+        OptionItem(
+            icon = Icons.Default.Edit,
+            label = "Keep Editing",
+            isFocused = focusIndex == 1,
+            onClick = onCancel
+        )
+    }
 }

@@ -99,6 +99,12 @@ class DoodleViewModel @Inject constructor(
         }
     }
 
+    fun cancelDrawing() {
+        _uiState.update { state ->
+            state.copy(isDrawing = false, lineStartX = null, lineStartY = null)
+        }
+    }
+
     fun drawAt(x: Int, y: Int) {
         _uiState.update { state ->
             if (state.selectedTool == DoodleTool.PEN) {
@@ -308,7 +314,7 @@ class DoodleViewModel @Inject constructor(
                 Log.d(TAG, "Posting doodle: size=${state.canvasSize.pixels}x${state.canvasSize.pixels}, data=${base64Data.length} chars")
 
                 socialRepository.createDoodle(
-                    canvasSize = state.canvasSize.sizeEnum,
+                    canvasSize = state.canvasSize.pixels,
                     data = base64Data,
                     caption = state.caption.takeIf { it.isNotBlank() },
                     igdbId = state.linkedGameId,

@@ -68,6 +68,9 @@ class SocialRepository @Inject constructor(
     private var _isLoadingMoreFeed = false
     private var _currentFeedUserId: String? = null
 
+    private val _eventComments = MutableStateFlow<Map<String, List<FeedComment>>>(emptyMap())
+    val eventComments: StateFlow<Map<String, List<FeedComment>>> = _eventComments.asStateFlow()
+
     val authState: StateFlow<SocialAuthManager.AuthState> = authManager.authState
     val serviceConnectionState: StateFlow<ArgosSocialService.ConnectionState> = socialService.connectionState
 
@@ -262,6 +265,15 @@ class SocialRepository @Inject constructor(
                                 )
                             } else event
                         }
+                    }
+                    is ArgosSocialService.IncomingMessage.EventCommentsData -> {
+                        Log.d(TAG, "EventCommentsData: eventId=${message.eventId}, count=${message.comments.size}")
+                        _eventComments.value = _eventComments.value + (message.eventId to message.comments)
+                    }
+                    is ArgosSocialService.IncomingMessage.FeedCommentReceived -> {
+                        Log.d(TAG, "FeedCommentReceived: eventId=${message.eventId}, commentId=${message.comment.id}")
+                        val current = _eventComments.value[message.eventId] ?: emptyList()
+                        _eventComments.value = _eventComments.value + (message.eventId to (current + message.comment))
                     }
                     is ArgosSocialService.IncomingMessage.RequestGameData -> {
                         Log.d(TAG, "Server requesting game data: igdbId=${message.igdbId}, title=${message.gameTitle}")
@@ -465,6 +477,13 @@ class SocialRepository @Inject constructor(
         Log.d(TAG, "reportEvent: eventId=$eventId, reason=$reason, connected=${socialService.isConnected()}")
         if (socialService.isConnected()) {
             socialService.reportEvent(eventId, reason)
+        }
+    }
+
+    fun requestEventComments(eventId: String) {
+        Log.d(TAG, "requestEventComments: eventId=$eventId, connected=${socialService.isConnected()}")
+        if (socialService.isConnected()) {
+            socialService.getEventComments(eventId)
         }
     }
 

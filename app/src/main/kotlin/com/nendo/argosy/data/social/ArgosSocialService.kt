@@ -98,6 +98,7 @@ class ArgosSocialService @Inject constructor(
         data class FeedEvent(val event: FeedEventDto) : IncomingMessage()
         data class FeedEventUpdated(val eventId: String, val likeCount: Int, val commentCount: Int) : IncomingMessage()
         data class FeedCommentReceived(val eventId: String, val comment: FeedComment) : IncomingMessage()
+        data class EventCommentsData(val eventId: String, val comments: List<FeedComment>) : IncomingMessage()
         data class Error(val code: String, val message: String) : IncomingMessage()
         data class Raw(val type: String, val payload: String) : IncomingMessage()
         data class SessionRevoked(val reason: String) : IncomingMessage()
@@ -365,6 +366,20 @@ class ArgosSocialService @Inject constructor(
                     } else null
                 }
 
+                MessageTypes.EVENT_COMMENTS -> {
+                    if (payload != null) {
+                        val eventId = payload.getString("event_id")
+                        val commentsArray = payload.optJSONArray("comments")
+                        val comments = if (commentsArray != null) {
+                            (0 until commentsArray.length()).mapNotNull { i ->
+                                parseFeedComment(commentsArray.getJSONObject(i))
+                            }
+                        } else emptyList()
+                        Log.d(TAG, "EVENT_COMMENTS: eventId=$eventId, count=${comments.size}")
+                        IncomingMessage.EventCommentsData(eventId, comments)
+                    } else null
+                }
+
                 else -> IncomingMessage.Raw(type, payload?.toString() ?: "{}")
             }
 
@@ -455,6 +470,11 @@ class ArgosSocialService @Inject constructor(
             "event_id" to eventId,
             "content" to content
         ))
+    }
+
+    fun getEventComments(eventId: String) {
+        Log.d(TAG, "getEventComments: eventId=$eventId")
+        send(MessageTypes.GET_EVENT_COMMENTS, mapOf("event_id" to eventId))
     }
 
     fun deleteComment(commentId: String) {
@@ -632,6 +652,12 @@ class ArgosSocialService @Inject constructor(
             val payloadObj = obj.optJSONObject("payload")
             val payload = payloadObj?.let { jsonObjectToMap(it) }
             val game = obj.optJSONObject("game")?.let { parseGameInfo(it) }
+            val commentsArray = obj.optJSONArray("comments")
+            val comments = if (commentsArray != null) {
+                (0 until commentsArray.length()).mapNotNull { i ->
+                    parseFeedComment(commentsArray.getJSONObject(i))
+                }
+            } else emptyList()
 
             FeedEventDto(
                 id = obj.getString("id"),
@@ -647,7 +673,8 @@ class ArgosSocialService @Inject constructor(
                 hidden = obj.optBoolean("hidden", false),
                 likeCount = obj.optInt("like_count", 0),
                 commentCount = obj.optInt("comment_count", 0),
-                isLikedByMe = obj.optBoolean("is_liked_by_me", false)
+                isLikedByMe = obj.optBoolean("is_liked_by_me", false),
+                comments = comments
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse feed event", e)

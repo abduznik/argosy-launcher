@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -81,6 +82,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant
@@ -107,15 +109,40 @@ class FeedEventDetailViewModel @Inject constructor(
     val uiState: StateFlow<FeedEventDetailUiState> = _uiState.asStateFlow()
 
     fun loadEvent(eventId: String) {
+        socialRepository.requestEventComments(eventId)
         viewModelScope.launch {
-            socialRepository.feedEvents.collect { events ->
+            combine(
+                socialRepository.feedEvents,
+                socialRepository.eventComments
+            ) { events, commentsMap ->
                 val event = events.find { it.id == eventId }
-                _uiState.value = _uiState.value.copy(
+                val embeddedComments = event?.comments ?: emptyList()
+                val realtimeComments = commentsMap[eventId] ?: emptyList()
+                val allComments = mergeComments(embeddedComments, realtimeComments)
+                event to allComments
+            }.collect { (event, comments) ->
+                val state = _uiState.value
+                _uiState.value = state.copy(
                     event = event,
-                    isLoading = event == null
+                    isLoading = event == null,
+                    comments = comments,
+                    focusedCommentIndex = state.focusedCommentIndex.coerceIn(
+                        -1, comments.size.coerceAtLeast(1) - 1
+                    )
                 )
             }
         }
+    }
+
+    private fun mergeComments(
+        embedded: List<FeedComment>,
+        realtime: List<FeedComment>
+    ): List<FeedComment> {
+        if (realtime.isEmpty()) return embedded
+        if (embedded.isEmpty()) return realtime
+        val embeddedIds = embedded.map { it.id }.toSet()
+        val newComments = realtime.filter { it.id !in embeddedIds }
+        return embedded + newComments
     }
 
     fun likeEvent() {
@@ -304,6 +331,9 @@ private fun LandscapeLayout(
     onCommentTextChange: (String) -> Unit,
     onSubmitComment: () -> Unit
 ) {
+    val isDoodle = event.eventType == FeedEventType.DOODLE
+    val mediaWeight = if (isDoodle) 0.5f else 0.4f
+
     Row(
         modifier = Modifier
             .fillMaxSize()
@@ -312,16 +342,16 @@ private fun LandscapeLayout(
     ) {
         Box(
             modifier = Modifier
-                .weight(0.4f)
+                .weight(mediaWeight)
                 .fillMaxHeight(),
             contentAlignment = Alignment.Center
         ) {
-            EventMediaContent(event)
+            EventMediaContent(event, fillWidth = isDoodle)
         }
 
         Column(
             modifier = Modifier
-                .weight(0.6f)
+                .weight(1f - mediaWeight)
                 .fillMaxHeight(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -352,34 +382,60 @@ private fun PortraitLayout(
     onCommentTextChange: (String) -> Unit,
     onSubmitComment: () -> Unit
 ) {
+    val listState = rememberLazyListState()
+    val headerItemCount = 4
+
+    LaunchedEffect(focusedCommentIndex) {
+        if (focusedCommentIndex >= 0) {
+            val targetIndex = focusedCommentIndex + headerItemCount
+            val layoutInfo = listState.layoutInfo
+            val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+            val targetItem = layoutInfo.visibleItemsInfo.find { it.index == targetIndex }
+            val scrollOffset = if (targetItem != null) {
+                targetItem.offset - (viewportHeight - targetItem.size) / 2
+            } else {
+                null
+            }
+            if (scrollOffset != null) {
+                listState.animateScrollToItem(targetIndex, scrollOffset)
+            } else {
+                listState.animateScrollToItem(targetIndex)
+            }
+        }
+    }
+
     LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item {
+        item(key = "media") {
             Box(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                EventMediaContent(event)
+                EventMediaContent(
+                    event = event,
+                    fillWidth = event.eventType == FeedEventType.DOODLE
+                )
             }
         }
 
-        item {
+        item(key = "metadata") {
             EventMetadata(event)
         }
 
-        item {
+        item(key = "comments_header") {
             Text(
-                text = "Comments (${event.commentCount})",
+                text = "Comments (${comments.size})",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
         }
 
-        item {
+        item(key = "comment_input") {
             CommentInput(
                 commentText = commentText,
                 isCommentInputFocused = isCommentInputFocused,
@@ -390,7 +446,7 @@ private fun PortraitLayout(
         }
 
         if (comments.isEmpty()) {
-            item {
+            item(key = "empty") {
                 Text(
                     text = "No comments yet. Be the first!",
                     style = MaterialTheme.typography.bodyMedium,
@@ -398,7 +454,7 @@ private fun PortraitLayout(
                 )
             }
         } else {
-            itemsIndexed(comments) { index, comment ->
+            itemsIndexed(comments, key = { _, comment -> comment.id }) { index, comment ->
                 CommentCard(
                     comment = comment,
                     isFocused = index == focusedCommentIndex
@@ -406,12 +462,12 @@ private fun PortraitLayout(
             }
         }
 
-        item { Spacer(modifier = Modifier.height(8.dp)) }
+        item(key = "spacer") { Spacer(modifier = Modifier.height(8.dp)) }
     }
 }
 
 @Composable
-private fun EventMediaContent(event: FeedEventDto) {
+private fun EventMediaContent(event: FeedEventDto, fillWidth: Boolean = false) {
     when (event.eventType) {
         FeedEventType.DOODLE -> {
             val doodleData = event.payload?.get("data") as? String
@@ -431,8 +487,16 @@ private fun EventMediaContent(event: FeedEventDto) {
                 CanvasSize.LARGE -> 0f
             }
 
+            val cardModifier = if (fillWidth) {
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+            } else {
+                Modifier.size(280.dp)
+            }
+
             Card(
-                modifier = Modifier.size(280.dp),
+                modifier = cardModifier,
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -518,7 +582,7 @@ private fun EventMetadata(event: FeedEventDto) {
                     )
                 }
 
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = user.displayName,
                         style = MaterialTheme.typography.titleMedium,
@@ -528,6 +592,22 @@ private fun EventMetadata(event: FeedEventDto) {
                         text = formatRelativeTime(event.createdAt),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = if (event.isLikedByMe) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        contentDescription = "Likes",
+                        modifier = Modifier.size(18.dp),
+                        tint = if (event.isLikedByMe) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${event.likeCount}",
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
@@ -574,27 +654,6 @@ private fun EventMetadata(event: FeedEventDto) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Icon(
-                    imageVector = if (event.isLikedByMe) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    contentDescription = "Likes",
-                    modifier = Modifier.size(20.dp),
-                    tint = if (event.isLikedByMe) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "${event.likeCount}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
     }
 }
 
@@ -609,41 +668,64 @@ private fun CommentsSection(
     onSubmitComment: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(focusedCommentIndex) {
+        if (focusedCommentIndex >= 0) {
+            val targetIndex = focusedCommentIndex + 2
+            val layoutInfo = listState.layoutInfo
+            val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+            val targetItem = layoutInfo.visibleItemsInfo.find { it.index == targetIndex }
+            val scrollOffset = if (targetItem != null) {
+                targetItem.offset - (viewportHeight - targetItem.size) / 2
+            } else {
+                null
+            }
+            if (scrollOffset != null) {
+                listState.animateScrollToItem(targetIndex, scrollOffset)
+            } else {
+                listState.animateScrollToItem(targetIndex)
+            }
+        }
+    }
+
+    LazyColumn(
+        state = listState,
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            text = "Comments",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
-        )
+        item(key = "comments_header") {
+            Text(
+                text = "Comments",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
 
-        CommentInput(
-            commentText = commentText,
-            isCommentInputFocused = isCommentInputFocused,
-            commentFocusRequester = commentFocusRequester,
-            onCommentTextChange = onCommentTextChange,
-            onSubmitComment = onSubmitComment
-        )
+        item(key = "comment_input") {
+            CommentInput(
+                commentText = commentText,
+                isCommentInputFocused = isCommentInputFocused,
+                commentFocusRequester = commentFocusRequester,
+                onCommentTextChange = onCommentTextChange,
+                onSubmitComment = onSubmitComment
+            )
+        }
 
         if (comments.isEmpty()) {
-            Text(
-                text = "No comments yet",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            )
+            item(key = "empty") {
+                Text(
+                    text = "No comments yet",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+            }
         } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                itemsIndexed(comments) { index, comment ->
-                    CommentCard(
-                        comment = comment,
-                        isFocused = index == focusedCommentIndex
-                    )
-                }
+            itemsIndexed(comments, key = { _, comment -> comment.id }) { index, comment ->
+                CommentCard(
+                    comment = comment,
+                    isFocused = index == focusedCommentIndex
+                )
             }
         }
     }

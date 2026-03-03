@@ -110,6 +110,9 @@ fun SocialScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 inputDispatcher.subscribeView(inputHandler, forRoute = Screen.ROUTE_SOCIAL)
+                if (viewModel.uiState.value.isConnected) {
+                    viewModel.refresh()
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -123,6 +126,7 @@ fun SocialScreen(
     val optionsState by viewModel.feedOptionsDelegate.state.collectAsState()
     val feedListState = rememberLazyListState()
     val friendsListState = rememberLazyListState()
+    val profileListState = rememberLazyListState()
 
     LaunchedEffect(uiState.isConnected) {
         if (uiState.isConnected && uiState.events.isEmpty()) {
@@ -147,6 +151,17 @@ fun SocialScreen(
             val itemHeight = layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 80
             val centerOffset = (viewportHeight - itemHeight) / 2
             friendsListState.animateScrollToItem(uiState.focusedFriendIndex, -centerOffset)
+        }
+    }
+
+    LaunchedEffect(uiState.profileFocusIndex) {
+        if (uiState.selectedTab == SocialTab.PROFILE) {
+            val itemIndex = profileFocusToItemIndex(uiState.profileFocusIndex)
+            val layoutInfo = profileListState.layoutInfo
+            val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+            val itemHeight = layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 60
+            val centerOffset = (viewportHeight - itemHeight) / 2
+            profileListState.animateScrollToItem(itemIndex, -centerOffset)
         }
     }
 
@@ -211,6 +226,7 @@ fun SocialScreen(
                             ProfileTabContent(
                                 user = uiState.connectedUser,
                                 focusIndex = uiState.profileFocusIndex,
+                                listState = profileListState,
                                 onlineStatus = uiState.socialOnlineStatus,
                                 showNowPlaying = uiState.socialShowNowPlaying,
                                 notifyFriendOnline = uiState.socialNotifyFriendOnline,
@@ -227,9 +243,6 @@ fun SocialScreen(
 
             FooterBar(
                 hints = buildList {
-                    add(InputButton.LB to "Prev Tab")
-                    add(InputButton.RB to "Next Tab")
-                    add(InputButton.START to "Menu")
                     when (uiState.selectedTab) {
                         SocialTab.FEED -> {
                             add(InputButton.A to "View")
