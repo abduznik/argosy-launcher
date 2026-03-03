@@ -44,7 +44,7 @@ enum class CanvasSize(val pixels: Int, val sizeEnum: Int) {
 }
 
 enum class DoodleSection {
-    CANVAS, PALETTE, SIZE, CAPTION
+    CANVAS, PALETTE, SIZE, CAPTION, GAME
 }
 
 enum class ZoomLevel(val scale: Float) {
@@ -74,6 +74,7 @@ data class DoodleUiState(
     val caption: String = "",
     val linkedGameId: Int? = null,
     val linkedGameTitle: String? = null,
+    val linkedGameCoverPath: String? = null,
     val isDrawing: Boolean = false,
     val lineStartX: Int? = null,
     val lineStartY: Int? = null,
@@ -84,7 +85,12 @@ data class DoodleUiState(
     val isPosting: Boolean = false,
     val zoomLevel: ZoomLevel = ZoomLevel.FIT,
     val panOffsetX: Float = 0f,
-    val panOffsetY: Float = 0f
+    val panOffsetY: Float = 0f,
+    val showGamePicker: Boolean = false,
+    val gamePickerQuery: String = "",
+    val gamePickerResults: List<GamePickerItem> = emptyList(),
+    val gamePickerFocusIndex: Int = 0,
+    val gamePickerSearchFocused: Boolean = true
 ) {
     val hasContent: Boolean get() = pixels.isNotEmpty()
 
@@ -172,6 +178,14 @@ fun floodFill(
 
     return result
 }
+
+data class GamePickerItem(
+    val id: Long,
+    val igdbId: Int?,
+    val title: String,
+    val platform: String?,
+    val coverPath: String?
+)
 
 data class DecodedDoodle(
     val size: CanvasSize,

@@ -298,7 +298,10 @@ fun NavGraph(
             val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
             FeedEventDetailScreen(
                 eventId = eventId,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onNavigateToGame = { gameId ->
+                    navController.navigate(Screen.GameDetail.createRoute(gameId))
+                }
             )
         }
 

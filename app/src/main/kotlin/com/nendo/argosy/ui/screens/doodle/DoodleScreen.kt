@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -43,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -51,6 +54,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.nendo.argosy.ui.components.FooterBar
@@ -58,6 +63,7 @@ import com.nendo.argosy.ui.components.InputButton
 import com.nendo.argosy.ui.components.Modal
 import com.nendo.argosy.ui.input.LocalInputDispatcher
 import com.nendo.argosy.ui.screens.gamedetail.components.OptionItem
+import com.nendo.argosy.ui.util.clickableNoFocus
 
 @Composable
 fun DoodleScreen(
@@ -149,6 +155,21 @@ fun DoodleScreen(
             onCancel = { viewModel.hideDiscardDialog() }
         )
     }
+
+    if (uiState.showGamePicker) {
+        GamePickerDialog(
+            query = uiState.gamePickerQuery,
+            results = uiState.gamePickerResults,
+            focusIndex = uiState.gamePickerFocusIndex,
+            searchFocused = uiState.gamePickerSearchFocused,
+            onQueryChange = { viewModel.updateGamePickerQuery(it) },
+            onSelectItem = { index ->
+                viewModel.moveGamePickerFocus(index - uiState.gamePickerFocusIndex)
+                viewModel.selectGame()
+            },
+            onDismiss = { viewModel.hideGamePicker() }
+        )
+    }
 }
 
 @Composable
@@ -226,8 +247,14 @@ private fun LandscapeLayout(
                     caption = uiState.caption,
                     onCaptionChange = { viewModel.setCaption(it) },
                     isFocused = uiState.currentSection == DoodleSection.CAPTION,
-                    focusRequester = captionFocusRequester,
-                    linkedGameTitle = uiState.linkedGameTitle
+                    focusRequester = captionFocusRequester
+                )
+
+                GameSection(
+                    linkedGameTitle = uiState.linkedGameTitle,
+                    linkedGameCoverPath = uiState.linkedGameCoverPath,
+                    isFocused = uiState.currentSection == DoodleSection.GAME,
+                    onClick = { viewModel.showGamePicker() }
                 )
 
                 if (uiState.zoomLevel != ZoomLevel.FIT) {
@@ -240,7 +267,8 @@ private fun LandscapeLayout(
             currentSection = uiState.currentSection,
             selectedTool = uiState.selectedTool,
             isDrawing = uiState.isDrawing,
-            hasContent = uiState.hasContent
+            hasContent = uiState.hasContent,
+            linkedGameTitle = uiState.linkedGameTitle
         )
     }
 }
@@ -328,8 +356,16 @@ private fun PortraitLayout(
             caption = uiState.caption,
             onCaptionChange = { viewModel.setCaption(it) },
             isFocused = uiState.currentSection == DoodleSection.CAPTION,
-            focusRequester = captionFocusRequester,
-            linkedGameTitle = uiState.linkedGameTitle
+            focusRequester = captionFocusRequester
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        GameSection(
+            linkedGameTitle = uiState.linkedGameTitle,
+            linkedGameCoverPath = uiState.linkedGameCoverPath,
+            isFocused = uiState.currentSection == DoodleSection.GAME,
+            onClick = { viewModel.showGamePicker() }
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -338,7 +374,8 @@ private fun PortraitLayout(
             currentSection = uiState.currentSection,
             selectedTool = uiState.selectedTool,
             isDrawing = uiState.isDrawing,
-            hasContent = uiState.hasContent
+            hasContent = uiState.hasContent,
+            linkedGameTitle = uiState.linkedGameTitle
         )
     }
 }
@@ -511,10 +548,9 @@ private fun CaptionInput(
     caption: String,
     onCaptionChange: (String) -> Unit,
     isFocused: Boolean,
-    focusRequester: FocusRequester,
-    linkedGameTitle: String?
+    focusRequester: FocusRequester
 ) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
@@ -529,37 +565,26 @@ private fun CaptionInput(
             )
             .padding(12.dp)
     ) {
-        Box {
-            if (caption.isEmpty()) {
-                Text(
-                    text = "Add a caption...",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                )
-            }
-            BasicTextField(
-                value = caption,
-                onValueChange = onCaptionChange,
-                textStyle = TextStyle(
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = MaterialTheme.typography.bodyMedium.fontSize
-                ),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester)
-            )
-        }
-
-        if (linkedGameTitle != null) {
-            Spacer(modifier = Modifier.height(4.dp))
+        if (caption.isEmpty()) {
             Text(
-                text = "Game: $linkedGameTitle",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary
+                text = "Add a caption...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )
         }
+        BasicTextField(
+            value = caption,
+            onValueChange = onCaptionChange,
+            textStyle = TextStyle(
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = MaterialTheme.typography.bodyMedium.fontSize
+            ),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester)
+        )
     }
 }
 
@@ -584,7 +609,8 @@ private fun DoodleFooter(
     currentSection: DoodleSection,
     selectedTool: DoodleTool,
     isDrawing: Boolean,
-    hasContent: Boolean
+    hasContent: Boolean,
+    linkedGameTitle: String? = null
 ) {
     val hints = buildList {
         when (currentSection) {
@@ -610,6 +636,12 @@ private fun DoodleFooter(
             }
             DoodleSection.CAPTION -> {
                 add(InputButton.A to "Edit")
+            }
+            DoodleSection.GAME -> {
+                add(InputButton.A to "Select")
+                if (linkedGameTitle != null) {
+                    add(InputButton.Y to "Clear")
+                }
             }
         }
         add(InputButton.START to "Post")
@@ -694,5 +726,155 @@ private fun DiscardDialog(
             isFocused = focusIndex == 1,
             onClick = onCancel
         )
+    }
+}
+
+@Composable
+private fun GameSection(
+    linkedGameTitle: String?,
+    linkedGameCoverPath: String?,
+    isFocused: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .then(
+                if (isFocused) Modifier.border(
+                    2.dp,
+                    MaterialTheme.colorScheme.primary,
+                    RoundedCornerShape(8.dp)
+                )
+                else Modifier
+            )
+            .clickableNoFocus(onClick = onClick)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        if (linkedGameCoverPath != null) {
+            val imageData = if (linkedGameCoverPath.startsWith("/")) {
+                java.io.File(linkedGameCoverPath)
+            } else {
+                linkedGameCoverPath
+            }
+            AsyncImage(
+                model = imageData,
+                contentDescription = linkedGameTitle,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(4.dp))
+            )
+        }
+        Text(
+            text = linkedGameTitle ?: "No game selected",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (linkedGameTitle != null) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
+    }
+}
+
+@Composable
+private fun GamePickerDialog(
+    query: String,
+    results: List<GamePickerItem>,
+    focusIndex: Int,
+    searchFocused: Boolean,
+    onQueryChange: (String) -> Unit,
+    onSelectItem: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val searchFocusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+
+    LaunchedEffect(searchFocused) {
+        if (searchFocused) {
+            searchFocusRequester.requestFocus()
+        } else {
+            focusManager.clearFocus()
+        }
+    }
+
+    Modal(
+        title = "Select Game",
+        baseWidth = 400.dp,
+        onDismiss = onDismiss,
+        footerHints = buildList {
+            if (searchFocused) {
+                add(InputButton.DPAD_DOWN to "Browse")
+            } else {
+                add(InputButton.DPAD to "Navigate")
+                add(InputButton.A to "Select")
+            }
+            add(InputButton.B to "Cancel")
+        }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(
+                    if (searchFocused) MaterialTheme.colorScheme.surfaceVariant
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                )
+                .then(
+                    if (searchFocused) Modifier.border(
+                        2.dp,
+                        MaterialTheme.colorScheme.primary,
+                        RoundedCornerShape(8.dp)
+                    )
+                    else Modifier
+                )
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            if (query.isEmpty()) {
+                Text(
+                    text = "Search games...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                textStyle = TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = MaterialTheme.typography.bodyMedium.fontSize
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(searchFocusRequester)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+        ) {
+            item {
+                OptionItem(
+                    label = "None",
+                    isFocused = !searchFocused && focusIndex == 0,
+                    onClick = { onSelectItem(0) }
+                )
+            }
+            itemsIndexed(results) { index, item ->
+                OptionItem(
+                    label = item.title,
+                    value = item.platform,
+                    isFocused = !searchFocused && focusIndex == index + 1,
+                    onClick = { onSelectItem(index + 1) }
+                )
+            }
+        }
     }
 }

@@ -788,23 +788,72 @@ private fun DoodleCard(
                         }
 
                         if (event.game != null || event.fallbackTitle.isNotEmpty()) {
+                            Spacer(modifier = Modifier.weight(1f))
+
+                            val coverThumb = event.game?.coverThumb
+                            val gameBitmap = remember(coverThumb) {
+                                coverThumb?.let {
+                                    try {
+                                        val bytes = Base64.decode(it, Base64.DEFAULT)
+                                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                }
+                            }
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .padding(6.dp)
                             ) {
-                                Icon(
-                                    Icons.Default.SportsEsports,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = event.game?.title ?: event.fallbackTitle,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                if (gameBitmap != null) {
+                                    Image(
+                                        bitmap = gameBitmap,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .height(40.dp)
+                                            .aspectRatio(3f / 4f)
+                                            .clip(RoundedCornerShape(4.dp))
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .height(40.dp)
+                                            .aspectRatio(3f / 4f)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.SportsEsports,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                                Column {
+                                    Text(
+                                        text = event.game?.title ?: event.fallbackTitle,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    val platform = event.game?.platform
+                                    if (platform != null) {
+                                        Text(
+                                            text = platform,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

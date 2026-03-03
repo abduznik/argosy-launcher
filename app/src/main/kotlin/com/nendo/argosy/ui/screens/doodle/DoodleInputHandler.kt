@@ -12,6 +12,15 @@ class DoodleInputHandler(
     override fun onUp(): InputResult {
         val state = viewModel.uiState.value
         return when {
+            state.showGamePicker && !state.gamePickerSearchFocused -> {
+                if (state.gamePickerFocusIndex == 0) {
+                    viewModel.focusGamePickerSearch()
+                } else {
+                    viewModel.moveGamePickerFocus(-1)
+                }
+                InputResult.HANDLED
+            }
+            state.showGamePicker -> InputResult.HANDLED
             state.showPostMenu -> {
                 viewModel.movePostMenuFocus(-1)
                 InputResult.HANDLED
@@ -35,6 +44,14 @@ class DoodleInputHandler(
     override fun onDown(): InputResult {
         val state = viewModel.uiState.value
         return when {
+            state.showGamePicker && state.gamePickerSearchFocused -> {
+                viewModel.focusGamePickerList()
+                InputResult.HANDLED
+            }
+            state.showGamePicker -> {
+                viewModel.moveGamePickerFocus(1)
+                InputResult.HANDLED
+            }
             state.showPostMenu -> {
                 viewModel.movePostMenuFocus(1)
                 InputResult.HANDLED
@@ -58,7 +75,7 @@ class DoodleInputHandler(
     override fun onLeft(): InputResult {
         val state = viewModel.uiState.value
         return when {
-            state.showPostMenu || state.showDiscardDialog -> InputResult.UNHANDLED
+            state.showGamePicker || state.showPostMenu || state.showDiscardDialog -> InputResult.UNHANDLED
             state.currentSection == DoodleSection.CANVAS -> {
                 viewModel.moveCursor(-1, 0)
                 InputResult.HANDLED
@@ -78,7 +95,7 @@ class DoodleInputHandler(
     override fun onRight(): InputResult {
         val state = viewModel.uiState.value
         return when {
-            state.showPostMenu || state.showDiscardDialog -> InputResult.UNHANDLED
+            state.showGamePicker || state.showPostMenu || state.showDiscardDialog -> InputResult.UNHANDLED
             state.currentSection == DoodleSection.CANVAS -> {
                 viewModel.moveCursor(1, 0)
                 InputResult.HANDLED
@@ -98,6 +115,11 @@ class DoodleInputHandler(
     override fun onConfirm(): InputResult {
         val state = viewModel.uiState.value
         return when {
+            state.showGamePicker && !state.gamePickerSearchFocused -> {
+                viewModel.selectGame()
+                InputResult.HANDLED
+            }
+            state.showGamePicker -> InputResult.HANDLED
             state.showPostMenu -> {
                 val shouldExit = viewModel.confirmPostMenuSelection()
                 InputResult.HANDLED
@@ -130,6 +152,10 @@ class DoodleInputHandler(
                 onOpenKeyboard()
                 InputResult.HANDLED
             }
+            state.currentSection == DoodleSection.GAME -> {
+                viewModel.showGamePicker()
+                InputResult.HANDLED
+            }
             else -> InputResult.UNHANDLED
         }
     }
@@ -137,6 +163,10 @@ class DoodleInputHandler(
     override fun onBack(): InputResult {
         val state = viewModel.uiState.value
         return when {
+            state.showGamePicker -> {
+                viewModel.hideGamePicker()
+                InputResult.HANDLED
+            }
             state.showPostMenu -> {
                 viewModel.hidePostMenu()
                 InputResult.HANDLED
@@ -162,7 +192,7 @@ class DoodleInputHandler(
 
     override fun onMenu(): InputResult {
         val state = viewModel.uiState.value
-        if (!state.showPostMenu && !state.showDiscardDialog) {
+        if (!state.showPostMenu && !state.showDiscardDialog && !state.showGamePicker) {
             viewModel.showPostMenu()
             return InputResult.HANDLED
         }
@@ -175,16 +205,23 @@ class DoodleInputHandler(
 
     override fun onSecondaryAction(): InputResult {
         val state = viewModel.uiState.value
-        if (!state.showPostMenu && !state.showDiscardDialog && state.currentSection == DoodleSection.CANVAS) {
-            viewModel.cycleTool()
-            return InputResult.HANDLED
+        if (state.showPostMenu || state.showDiscardDialog || state.showGamePicker) return InputResult.UNHANDLED
+        return when (state.currentSection) {
+            DoodleSection.CANVAS -> {
+                viewModel.cycleTool()
+                InputResult.HANDLED
+            }
+            DoodleSection.GAME -> {
+                viewModel.clearLinkedGame()
+                InputResult.HANDLED
+            }
+            else -> InputResult.UNHANDLED
         }
-        return InputResult.UNHANDLED
     }
 
     override fun onPrevSection(): InputResult {
         val state = viewModel.uiState.value
-        if (!state.showPostMenu && !state.showDiscardDialog) {
+        if (!state.showPostMenu && !state.showDiscardDialog && !state.showGamePicker) {
             viewModel.previousSection()
             return InputResult.HANDLED
         }
@@ -193,7 +230,7 @@ class DoodleInputHandler(
 
     override fun onNextSection(): InputResult {
         val state = viewModel.uiState.value
-        if (!state.showPostMenu && !state.showDiscardDialog) {
+        if (!state.showPostMenu && !state.showDiscardDialog && !state.showGamePicker) {
             viewModel.nextSection()
             return InputResult.HANDLED
         }
@@ -202,7 +239,7 @@ class DoodleInputHandler(
 
     override fun onRightStickClick(): InputResult {
         val state = viewModel.uiState.value
-        if (!state.showPostMenu && !state.showDiscardDialog) {
+        if (!state.showPostMenu && !state.showDiscardDialog && !state.showGamePicker) {
             viewModel.cycleZoom()
             return InputResult.HANDLED
         }

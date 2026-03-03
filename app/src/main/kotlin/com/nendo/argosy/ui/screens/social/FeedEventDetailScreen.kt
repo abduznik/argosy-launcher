@@ -66,6 +66,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nendo.argosy.data.local.dao.GameDao
 import com.nendo.argosy.data.social.FeedComment
 import com.nendo.argosy.data.social.FeedEventDto
 import com.nendo.argosy.data.social.FeedEventType
@@ -74,6 +75,7 @@ import com.nendo.argosy.ui.components.FooterBar
 import com.nendo.argosy.ui.components.InputButton
 import com.nendo.argosy.ui.input.InputHandler
 import com.nendo.argosy.ui.input.InputResult
+import com.nendo.argosy.ui.util.clickableNoFocus
 import com.nendo.argosy.ui.input.LocalInputDispatcher
 import com.nendo.argosy.ui.screens.doodle.CanvasSize
 import com.nendo.argosy.ui.screens.doodle.DoodleEncoder
@@ -95,7 +97,8 @@ data class FeedEventDetailUiState(
     val focusedCommentIndex: Int = -1,
     val commentText: String = "",
     val isCommentInputFocused: Boolean = false,
-    val scrollToCommentInput: Boolean = false
+    val scrollToCommentInput: Boolean = false,
+    val localGameId: Long? = null
 ) {
     val focusedComment: FeedComment?
         get() = comments.getOrNull(focusedCommentIndex)
@@ -103,7 +106,8 @@ data class FeedEventDetailUiState(
 
 @HiltViewModel
 class FeedEventDetailViewModel @Inject constructor(
-    private val socialRepository: SocialRepository
+    private val socialRepository: SocialRepository,
+    private val gameDao: GameDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FeedEventDetailUiState())
@@ -123,13 +127,20 @@ class FeedEventDetailViewModel @Inject constructor(
                 event to allComments
             }.collect { (event, comments) ->
                 val state = _uiState.value
+                val igdbId = event?.igdbId ?: event?.game?.igdbId
+                val localGameId = if (igdbId != null && state.localGameId == null) {
+                    gameDao.getByIgdbId(igdbId.toLong())?.id
+                } else {
+                    state.localGameId
+                }
                 _uiState.value = state.copy(
                     event = event,
                     isLoading = event == null,
                     comments = comments,
                     focusedCommentIndex = state.focusedCommentIndex.coerceIn(
                         -1, comments.size.coerceAtLeast(1) - 1
-                    )
+                    ),
+                    localGameId = localGameId
                 )
             }
         }
@@ -197,7 +208,10 @@ class FeedEventDetailViewModel @Inject constructor(
         return false
     }
 
-    fun createInputHandler(onBack: () -> Unit): InputHandler = object : InputHandler {
+    fun createInputHandler(
+        onBack: () -> Unit,
+        onNavigateToGame: (Long) -> Unit
+    ): InputHandler = object : InputHandler {
         override fun onUp(): InputResult {
             if (_uiState.value.isCommentInputFocused) return InputResult.UNHANDLED
             return if (moveFocus(-1)) InputResult.HANDLED else InputResult.UNHANDLED
@@ -233,6 +247,12 @@ class FeedEventDetailViewModel @Inject constructor(
             likeEvent()
             return InputResult.HANDLED
         }
+
+        override fun onContextMenu(): InputResult {
+            val gameId = _uiState.value.localGameId ?: return InputResult.UNHANDLED
+            onNavigateToGame(gameId)
+            return InputResult.HANDLED
+        }
     }
 }
 
@@ -240,11 +260,12 @@ class FeedEventDetailViewModel @Inject constructor(
 fun FeedEventDetailScreen(
     eventId: String,
     onBack: () -> Unit,
+    onNavigateToGame: (Long) -> Unit = {},
     viewModel: FeedEventDetailViewModel = hiltViewModel()
 ) {
     val inputDispatcher = LocalInputDispatcher.current
-    val inputHandler = remember(onBack) {
-        viewModel.createInputHandler(onBack = onBack)
+    val inputHandler = remember(onBack, onNavigateToGame) {
+        viewModel.createInputHandler(onBack = onBack, onNavigateToGame = onNavigateToGame)
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -299,10 +320,12 @@ fun FeedEventDetailScreen(
                                 commentText = uiState.commentText,
                                 isCommentInputFocused = uiState.isCommentInputFocused,
                                 scrollToCommentInput = uiState.scrollToCommentInput,
+                                localGameId = uiState.localGameId,
                                 commentFocusRequester = commentFocusRequester,
                                 onCommentTextChange = viewModel::updateCommentText,
                                 onSubmitComment = viewModel::submitComment,
-                                onCommentInputScrolled = viewModel::onCommentInputScrolled
+                                onCommentInputScrolled = viewModel::onCommentInputScrolled,
+                                onNavigateToGame = onNavigateToGame
                             )
                         } else {
                             PortraitLayout(
@@ -312,10 +335,12 @@ fun FeedEventDetailScreen(
                                 commentText = uiState.commentText,
                                 isCommentInputFocused = uiState.isCommentInputFocused,
                                 scrollToCommentInput = uiState.scrollToCommentInput,
+                                localGameId = uiState.localGameId,
                                 commentFocusRequester = commentFocusRequester,
                                 onCommentTextChange = viewModel::updateCommentText,
                                 onSubmitComment = viewModel::submitComment,
-                                onCommentInputScrolled = viewModel::onCommentInputScrolled
+                                onCommentInputScrolled = viewModel::onCommentInputScrolled,
+                                onNavigateToGame = onNavigateToGame
                             )
                         }
                     }
@@ -325,11 +350,14 @@ fun FeedEventDetailScreen(
 
         val isLiked = uiState.event?.isLikedByMe == true
         FooterBar(
-            hints = listOf(
-                InputButton.B to "Back",
-                InputButton.Y to if (isLiked) "Unlike" else "Like",
-                InputButton.A to "Comment"
-            )
+            hints = buildList {
+                add(InputButton.B to "Back")
+                add(InputButton.Y to if (isLiked) "Unlike" else "Like")
+                add(InputButton.A to "Comment")
+                if (uiState.localGameId != null) {
+                    add(InputButton.X to "View Game")
+                }
+            }
         )
     }
 }
@@ -342,10 +370,12 @@ private fun LandscapeLayout(
     commentText: String,
     isCommentInputFocused: Boolean,
     scrollToCommentInput: Boolean,
+    localGameId: Long?,
     commentFocusRequester: FocusRequester,
     onCommentTextChange: (String) -> Unit,
     onSubmitComment: () -> Unit,
-    onCommentInputScrolled: () -> Unit
+    onCommentInputScrolled: () -> Unit,
+    onNavigateToGame: (Long) -> Unit
 ) {
     val isDoodle = event.eventType == FeedEventType.DOODLE
     val mediaWeight = if (isDoodle) 0.5f else 0.4f
@@ -371,7 +401,7 @@ private fun LandscapeLayout(
                 .fillMaxHeight(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            EventMetadata(event)
+            EventMetadata(event, localGameId, onNavigateToGame)
 
             CommentsSection(
                 comments = comments,
@@ -397,10 +427,12 @@ private fun PortraitLayout(
     commentText: String,
     isCommentInputFocused: Boolean,
     scrollToCommentInput: Boolean,
+    localGameId: Long?,
     commentFocusRequester: FocusRequester,
     onCommentTextChange: (String) -> Unit,
     onSubmitComment: () -> Unit,
-    onCommentInputScrolled: () -> Unit
+    onCommentInputScrolled: () -> Unit,
+    onNavigateToGame: (Long) -> Unit
 ) {
     val listState = rememberLazyListState()
     val headerItemCount = 4
@@ -452,7 +484,7 @@ private fun PortraitLayout(
         }
 
         item(key = "metadata") {
-            EventMetadata(event)
+            EventMetadata(event, localGameId, onNavigateToGame)
         }
 
         item(key = "comments_header") {
@@ -588,7 +620,11 @@ private fun EventMediaContent(event: FeedEventDto, fillWidth: Boolean = false) {
 }
 
 @Composable
-private fun EventMetadata(event: FeedEventDto) {
+private fun EventMetadata(
+    event: FeedEventDto,
+    localGameId: Long? = null,
+    onNavigateToGame: (Long) -> Unit = {}
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -651,21 +687,72 @@ private fun EventMetadata(event: FeedEventDto) {
             }
 
             if (event.game != null || event.fallbackTitle.isNotEmpty()) {
+                val coverThumb = event.game?.coverThumb
+                val gameBitmap = remember(coverThumb) {
+                    coverThumb?.let {
+                        try {
+                            val bytes = Base64.decode(it, Base64.DEFAULT)
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                }
+                val gameTagModifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .then(
+                        if (localGameId != null) Modifier.clickableNoFocus { onNavigateToGame(localGameId) }
+                        else Modifier
+                    )
+                    .padding(8.dp)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = gameTagModifier
                 ) {
-                    Icon(
-                        Icons.Default.SportsEsports,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = event.game?.title ?: event.fallbackTitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    if (gameBitmap != null) {
+                        Image(
+                            bitmap = gameBitmap,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .height(56.dp)
+                                .aspectRatio(3f / 4f)
+                                .clip(RoundedCornerShape(6.dp))
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .height(56.dp)
+                                .aspectRatio(3f / 4f)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.surface),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.SportsEsports,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                    Column {
+                        Text(
+                            text = event.game?.title ?: event.fallbackTitle,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        val platform = event.game?.platform
+                        if (platform != null) {
+                            Text(
+                                text = platform,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
         } else {

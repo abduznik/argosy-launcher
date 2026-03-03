@@ -4,8 +4,12 @@ import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nendo.argosy.data.local.dao.GameDao
 import com.nendo.argosy.data.social.SocialRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +27,8 @@ sealed class DoodleEvent {
 @HiltViewModel
 class DoodleViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val socialRepository: SocialRepository
+    private val socialRepository: SocialRepository,
+    private val gameDao: GameDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DoodleUiState())
@@ -177,7 +182,8 @@ class DoodleViewModel @Inject constructor(
                 DoodleSection.CANVAS -> DoodleSection.PALETTE
                 DoodleSection.PALETTE -> DoodleSection.SIZE
                 DoodleSection.SIZE -> DoodleSection.CAPTION
-                DoodleSection.CAPTION -> DoodleSection.CANVAS
+                DoodleSection.CAPTION -> DoodleSection.GAME
+                DoodleSection.GAME -> DoodleSection.CANVAS
             }
             state.copy(currentSection = next)
         }
@@ -186,10 +192,11 @@ class DoodleViewModel @Inject constructor(
     fun previousSection() {
         _uiState.update { state ->
             val prev = when (state.currentSection) {
-                DoodleSection.CANVAS -> DoodleSection.CAPTION
+                DoodleSection.CANVAS -> DoodleSection.GAME
                 DoodleSection.PALETTE -> DoodleSection.CANVAS
                 DoodleSection.SIZE -> DoodleSection.PALETTE
                 DoodleSection.CAPTION -> DoodleSection.SIZE
+                DoodleSection.GAME -> DoodleSection.CAPTION
             }
             state.copy(currentSection = prev)
         }
@@ -297,6 +304,102 @@ class DoodleViewModel @Inject constructor(
         return state.discardDialogFocusIndex == 0
     }
 
+    private var gameSearchJob: Job? = null
+
+    fun showGamePicker() {
+        _uiState.update {
+            it.copy(
+                showGamePicker = true,
+                gamePickerQuery = "",
+                gamePickerFocusIndex = 0,
+                gamePickerSearchFocused = true
+            )
+        }
+        viewModelScope.launch {
+            val recent = gameDao.getRecentlyPlayed(10)
+            val items = recent.map { it.toPickerItem() }
+            _uiState.update { it.copy(gamePickerResults = items) }
+        }
+    }
+
+    fun hideGamePicker() {
+        gameSearchJob?.cancel()
+        _uiState.update {
+            it.copy(
+                showGamePicker = false,
+                gamePickerQuery = "",
+                gamePickerResults = emptyList(),
+                gamePickerFocusIndex = 0,
+                gamePickerSearchFocused = true
+            )
+        }
+    }
+
+    fun focusGamePickerSearch() {
+        _uiState.update { it.copy(gamePickerSearchFocused = true) }
+    }
+
+    fun focusGamePickerList() {
+        _uiState.update { it.copy(gamePickerSearchFocused = false, gamePickerFocusIndex = 0) }
+    }
+
+    fun updateGamePickerQuery(query: String) {
+        _uiState.update { it.copy(gamePickerQuery = query, gamePickerFocusIndex = 0) }
+        gameSearchJob?.cancel()
+        if (query.isBlank()) {
+            viewModelScope.launch {
+                val recent = gameDao.getRecentlyPlayed(10)
+                _uiState.update { it.copy(gamePickerResults = recent.map { g -> g.toPickerItem() }) }
+            }
+            return
+        }
+        gameSearchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MS)
+            val results = gameDao.searchForQuickMenu(query, 10).first()
+            _uiState.update { it.copy(gamePickerResults = results.map { g -> g.toPickerItem() }) }
+        }
+    }
+
+    fun moveGamePickerFocus(delta: Int) {
+        _uiState.update { state ->
+            val maxIndex = state.gamePickerResults.size
+            val newIndex = (state.gamePickerFocusIndex + delta).coerceIn(0, maxIndex)
+            state.copy(gamePickerFocusIndex = newIndex)
+        }
+    }
+
+    fun selectGame() {
+        val state = _uiState.value
+        if (state.gamePickerFocusIndex == 0) {
+            clearLinkedGame()
+            hideGamePicker()
+            return
+        }
+        val item = state.gamePickerResults.getOrNull(state.gamePickerFocusIndex - 1) ?: return
+        _uiState.update {
+            it.copy(
+                linkedGameId = item.igdbId,
+                linkedGameTitle = item.title,
+                linkedGameCoverPath = item.coverPath
+            )
+        }
+        hideGamePicker()
+    }
+
+    fun clearLinkedGame() {
+        _uiState.update {
+            it.copy(linkedGameId = null, linkedGameTitle = null, linkedGameCoverPath = null)
+        }
+    }
+
+    private fun com.nendo.argosy.data.local.entity.GameEntity.toPickerItem() = GamePickerItem(
+        id = id,
+        igdbId = igdbId?.toInt(),
+        title = title,
+        platform = platformSlug,
+        coverPath = coverPath
+    )
+
     fun post() {
         val state = _uiState.value
         if (state.pixels.isEmpty()) {
@@ -338,5 +441,6 @@ class DoodleViewModel @Inject constructor(
     companion object {
         private const val TAG = "DoodleViewModel"
         private const val MAX_CAPTION_LENGTH = 200
+        private const val SEARCH_DEBOUNCE_MS = 250L
     }
 }
