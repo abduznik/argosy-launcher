@@ -73,7 +73,8 @@ import com.nendo.argosy.data.social.SocialConnectionState
 import com.nendo.argosy.ui.screens.doodle.CanvasSize
 import com.nendo.argosy.ui.screens.doodle.DoodleEncoder
 import com.nendo.argosy.ui.screens.doodle.DoodlePreview
-import com.nendo.argosy.ui.components.FooterBar
+import com.nendo.argosy.ui.components.FooterBarWithState
+import com.nendo.argosy.ui.components.FooterHintItem
 import com.nendo.argosy.ui.components.InputButton
 import com.nendo.argosy.ui.input.LocalInputDispatcher
 import com.nendo.argosy.ui.navigation.Screen
@@ -241,19 +242,19 @@ fun SocialScreen(
                 }
             }
 
-            FooterBar(
+            FooterBarWithState(
                 hints = buildList {
                     when (uiState.selectedTab) {
                         SocialTab.FEED -> {
-                            add(InputButton.A to "View")
-                            add(InputButton.Y to if (isLiked) "Unlike" else "Like")
-                            add(InputButton.SELECT to "Options")
+                            add(FooterHintItem(InputButton.A, "View"))
+                            add(FooterHintItem(InputButton.Y, if (isLiked) "Unlike" else "Like"))
+                            add(FooterHintItem(InputButton.SELECT, "Options"))
                         }
                         SocialTab.FRIENDS -> {
-                            add(InputButton.A to "Profile")
+                            add(FooterHintItem(InputButton.A, "Profile", enabled = uiState.friends.isNotEmpty()))
                         }
                         SocialTab.PROFILE -> {
-                            add(InputButton.A to "Toggle")
+                            add(FooterHintItem(InputButton.A, "Toggle"))
                         }
                     }
                 }
