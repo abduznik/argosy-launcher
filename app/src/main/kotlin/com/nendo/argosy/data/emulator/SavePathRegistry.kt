@@ -282,42 +282,42 @@ object SavePathRegistry {
             supported = false
         ),
 
-        // PS2 - uses shared memory cards, not yet supported
+        // PS2 - folder memory card mode (per-game directories)
         "nethersx2" to SavePathConfig(
             emulatorId = "nethersx2",
             defaultPaths = listOf(
                 "{extStorage}/Android/data/xyz.aethersx2.android/files/memcards"
             ),
-            saveExtensions = listOf("ps2"),
-            usesSharedMemoryCard = true,
-            supported = false
+            saveExtensions = listOf("*"),
+            usesFolderBasedSaves = true,
+            supported = true
         ),
         "aethersx2" to SavePathConfig(
             emulatorId = "aethersx2",
             defaultPaths = listOf(
                 "{extStorage}/Android/data/xyz.aethersx2.android/files/memcards"
             ),
-            saveExtensions = listOf("ps2"),
-            usesSharedMemoryCard = true,
-            supported = false
+            saveExtensions = listOf("*"),
+            usesFolderBasedSaves = true,
+            supported = true
         ),
         "pcsx2" to SavePathConfig(
             emulatorId = "pcsx2",
             defaultPaths = listOf(
                 "{extStorage}/Android/data/net.pcsx2.emulator/files/memcards"
             ),
-            saveExtensions = listOf("ps2"),
-            usesSharedMemoryCard = true,
-            supported = false
+            saveExtensions = listOf("*"),
+            usesFolderBasedSaves = true,
+            supported = true
         ),
         "armsx2" to SavePathConfig(
             emulatorId = "armsx2",
             defaultPaths = listOf(
                 "{extStorage}/Android/data/come.nanodata.armsx2/files/memcards"
             ),
-            saveExtensions = listOf("ps2"),
-            usesSharedMemoryCard = true,
-            supported = false
+            saveExtensions = listOf("*"),
+            usesFolderBasedSaves = true,
+            supported = true
         ),
 
         // PSP - folder-based saves

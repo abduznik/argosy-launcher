@@ -37,6 +37,7 @@ class TitleIdExtractor @Inject constructor(
             "3ds" -> extract3DSTitleId(romFile)?.let { TitleIdResult(it, true) }
             "wiiu" -> extractWiiUTitleIdWithSource(romFile)
             "wii" -> extractWiiTitleId(romFile)?.let { TitleIdResult(it, true) }
+            "ps2" -> extractPS2Serial(romFile)
             else -> null
         }
         Logger.debug(TAG, "[SaveSync] DETECT | Title ID extraction result | file=${romFile.name}, platform=$platformId, titleId=${result?.titleId}, fromBinary=${result?.fromBinary}")
@@ -464,6 +465,58 @@ class TitleIdExtractor @Inject constructor(
         if (!titleId.all { it.isDigit() || it in 'A'..'F' || it in 'a'..'f' }) return false
         if (!titleId.uppercase().startsWith("0004")) return false
         return true
+    }
+
+    fun extractPS2Serial(romFile: File): TitleIdResult? {
+        val ext = romFile.extension.lowercase()
+
+        when (ext) {
+            "iso" -> extractPS2SerialFromIso(romFile)?.let {
+                Logger.debug(TAG, "[SaveSync] DETECT | PS2 serial from ISO | file=${romFile.name}, serial=$it")
+                return TitleIdResult(it, fromBinary = true)
+            }
+            "chd" -> ChdReader.extractPS2Serial(romFile)?.let {
+                Logger.debug(TAG, "[SaveSync] DETECT | PS2 serial from CHD | file=${romFile.name}, serial=$it")
+                return TitleIdResult(it, fromBinary = true)
+            }
+        }
+
+        val filename = romFile.nameWithoutExtension
+        val serialPattern = Regex("""\[?([A-Z]{4}-\d{5})\]?""")
+        serialPattern.find(filename)?.let {
+            val serial = it.groupValues[1]
+            Logger.debug(TAG, "[SaveSync] DETECT | PS2 serial from filename | file=${romFile.name}, serial=$serial")
+            return TitleIdResult(serial, fromBinary = false)
+        }
+
+        val parenPattern = Regex("""\(([A-Z]{4}-\d{5})\)""")
+        parenPattern.find(filename)?.let {
+            val serial = it.groupValues[1]
+            Logger.debug(TAG, "[SaveSync] DETECT | PS2 serial from filename (paren) | file=${romFile.name}, serial=$serial")
+            return TitleIdResult(serial, fromBinary = false)
+        }
+
+        return null
+    }
+
+    private fun extractPS2SerialFromIso(romFile: File): String? {
+        return try {
+            RandomAccessFile(romFile, "r").use { raf ->
+                val neededBytes = 101 * 2048
+                if (raf.length() < neededBytes) return null
+
+                val data = ByteArray(neededBytes)
+                raf.readFully(data)
+
+                val text = String(data, Charsets.ISO_8859_1)
+                val pattern = Regex("""BOOT2\s*=\s*cdrom0:\\([A-Z]{4})_(\d{3})\.(\d{2});""")
+                val match = pattern.find(text) ?: return null
+                "${match.groupValues[1]}-${match.groupValues[2]}${match.groupValues[3]}"
+            }
+        } catch (e: Exception) {
+            Logger.warn(TAG, "[SaveSync] DETECT | Failed to read PS2 ISO | file=${romFile.name}", e)
+            null
+        }
     }
 
     fun extractWiiUTitleId(romFile: File): String? {

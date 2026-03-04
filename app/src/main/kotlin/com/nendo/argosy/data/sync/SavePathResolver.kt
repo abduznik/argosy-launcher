@@ -16,6 +16,7 @@ import com.nendo.argosy.data.sync.platform.PspSaveHandler
 import com.nendo.argosy.data.sync.platform.SwitchSaveHandler
 import com.nendo.argosy.data.sync.platform.VitaSaveHandler
 import com.nendo.argosy.data.sync.platform.WiiSaveHandler
+import com.nendo.argosy.data.sync.platform.PS2SaveHandler
 import com.nendo.argosy.data.sync.platform.WiiUSaveHandler
 import com.nendo.argosy.data.titledb.TitleDbRepository
 import com.nendo.argosy.util.Logger
@@ -45,7 +46,8 @@ class SavePathResolver @Inject constructor(
     private val vitaSaveHandler: VitaSaveHandler,
     private val pspSaveHandler: PspSaveHandler,
     private val wiiSaveHandler: WiiSaveHandler,
-    private val wiiUSaveHandler: WiiUSaveHandler
+    private val wiiUSaveHandler: WiiUSaveHandler,
+    private val ps2SaveHandler: PS2SaveHandler
 ) {
     suspend fun discoverSavePath(
         emulatorId: String,
@@ -338,6 +340,7 @@ class SavePathResolver @Inject constructor(
             "psp" -> pspSaveHandler.findSaveFolderByTitleId(basePath, titleId)
             "wii" -> wiiSaveHandler.findSaveFolderByTitleId(basePath, titleId)
             "wiiu" -> wiiUSaveHandler.findSaveFolderByTitleId(basePath, titleId)
+            "ps2" -> ps2SaveHandler.findSaveFolderByTitleId(basePath, titleId)
             else -> null
         }
     }
@@ -566,6 +569,7 @@ class SavePathResolver @Inject constructor(
             "psp" -> pspSaveHandler.constructSavePath(baseDir, titleId)
             "wii" -> wiiSaveHandler.constructSavePath(baseDir, titleId)
             "wiiu" -> wiiUSaveHandler.constructSavePath(baseDir, titleId)
+            "ps2" -> ps2SaveHandler.constructSavePath(baseDir, titleId)
             else -> null
         }
     }
@@ -591,6 +595,7 @@ class SavePathResolver @Inject constructor(
             "psp" -> pspSaveHandler.resolveBasePath(config, basePathOverride)
             "wii" -> wiiSaveHandler.resolveBasePath(config, basePathOverride)
             "wiiu" -> wiiUSaveHandler.resolveBasePath(config, basePathOverride)
+            "ps2" -> ps2SaveHandler.resolveBasePath(config, basePathOverride)
             else -> basePathOverride ?: config.defaultPaths.firstOrNull { directoryExists(it) }
                 ?: config.defaultPaths.firstOrNull()
         } ?: return null
@@ -617,6 +622,7 @@ class SavePathResolver @Inject constructor(
             "psp" -> pspSaveHandler.constructSavePath(baseDir, titleId)
             "wii" -> wiiSaveHandler.constructSavePath(baseDir, titleId)
             "wiiu" -> wiiUSaveHandler.constructSavePath(baseDir, titleId)
+            "ps2" -> ps2SaveHandler.constructSavePath(baseDir, titleId)
             else -> null
         }
     }
