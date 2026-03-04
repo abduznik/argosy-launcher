@@ -1,9 +1,13 @@
 package com.nendo.argosy.ui.screens.gamedetail.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -31,8 +35,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -225,47 +231,89 @@ private fun PlayMenuItem(
     val showDownloadSize = !isDownloaded && !isInProgress && downloadSizeBytes != null
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Button(
-            onClick = onClick,
-            enabled = !isInProgress,
-            shape = RoundedCornerShape(Dimens.radiusMd),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = containerColor,
-                contentColor = contentColor,
-                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-            ),
-            contentPadding = if (isCompact) {
-                androidx.compose.foundation.layout.PaddingValues(Dimens.spacingSm)
-            } else {
-                ButtonDefaults.ContentPadding
-            },
-            modifier = if (isCompact) Modifier else Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(if (isCompact) Dimens.iconMd else Dimens.iconSm)
+        if (isInProgress) {
+            val animatedProgress by animateFloatAsState(
+                targetValue = downloadProgress,
+                animationSpec = tween(durationMillis = 500, easing = LinearEasing),
+                label = "btn_fill"
             )
-            if (!isCompact) {
-                Spacer(modifier = Modifier.width(Dimens.spacingSm))
-                if (showDownloadSize) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            val trackColor = MaterialTheme.colorScheme.surfaceVariant
+            val fillColor = containerColor
+            val progressContentColor = MaterialTheme.colorScheme.onPrimary
+
+            Box(
+                modifier = (if (isCompact) Modifier else Modifier.fillMaxWidth())
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(Dimens.radiusMd))
+                    .drawBehind {
+                        drawRect(trackColor)
+                        drawRect(fillColor, size = size.copy(width = size.width * animatedProgress))
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(
+                        if (isCompact) PaddingValues(Dimens.spacingSm) else ButtonDefaults.ContentPadding
+                    )
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = progressContentColor,
+                        modifier = Modifier.size(if (isCompact) Dimens.iconMd else Dimens.iconSm)
+                    )
+                    if (!isCompact) {
+                        Spacer(modifier = Modifier.width(Dimens.spacingSm))
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = progressContentColor
+                        )
+                    }
+                }
+            }
+        } else {
+            Button(
+                onClick = onClick,
+                shape = RoundedCornerShape(Dimens.radiusMd),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = containerColor,
+                    contentColor = contentColor
+                ),
+                contentPadding = if (isCompact) {
+                    PaddingValues(Dimens.spacingSm)
+                } else {
+                    ButtonDefaults.ContentPadding
+                },
+                modifier = if (isCompact) Modifier else Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(if (isCompact) Dimens.iconMd else Dimens.iconSm)
+                )
+                if (!isCompact) {
+                    Spacer(modifier = Modifier.width(Dimens.spacingSm))
+                    if (showDownloadSize) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                            Text(
+                                text = formatFileSize(downloadSizeBytes!!),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = contentColor.copy(alpha = 0.6f)
+                            )
+                        }
+                    } else {
                         Text(
                             text = label,
                             style = MaterialTheme.typography.labelLarge
                         )
-                        Text(
-                            text = formatFileSize(downloadSizeBytes!!),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = contentColor.copy(alpha = 0.6f)
-                        )
                     }
-                } else {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelLarge
-                    )
                 }
             }
         }
