@@ -43,6 +43,7 @@ data class SyncPreferences(
     val socialNotifyFriendOnline: Boolean = true,
     val socialNotifyFriendPlaying: Boolean = true,
     val discordRichPresenceEnabled: Boolean = true,
+    val socialSuppressNotificationsInGame: Boolean = false,
     val lastPlaySessionSync: Instant? = null
 )
 
@@ -87,6 +88,7 @@ class SyncPreferencesRepository @Inject constructor(
         val SOCIAL_NOTIFY_FRIEND_ONLINE = booleanPreferencesKey("social_notify_friend_online")
         val SOCIAL_NOTIFY_FRIEND_PLAYING = booleanPreferencesKey("social_notify_friend_playing")
         val DISCORD_RICH_PRESENCE_ENABLED = booleanPreferencesKey("discord_rich_presence_enabled")
+        val SOCIAL_SUPPRESS_NOTIFICATIONS_IN_GAME = booleanPreferencesKey("social_suppress_notifications_in_game")
         val SOCIAL_LAST_PLAY_SESSION_SYNC = stringPreferencesKey("social_last_play_session_sync")
     }
 
@@ -136,6 +138,7 @@ class SyncPreferencesRepository @Inject constructor(
             socialNotifyFriendOnline = prefs[Keys.SOCIAL_NOTIFY_FRIEND_ONLINE] ?: true,
             socialNotifyFriendPlaying = prefs[Keys.SOCIAL_NOTIFY_FRIEND_PLAYING] ?: true,
             discordRichPresenceEnabled = prefs[Keys.DISCORD_RICH_PRESENCE_ENABLED] ?: true,
+            socialSuppressNotificationsInGame = prefs[Keys.SOCIAL_SUPPRESS_NOTIFICATIONS_IN_GAME] ?: false,
             lastPlaySessionSync = prefs[Keys.SOCIAL_LAST_PLAY_SESSION_SYNC]?.let { Instant.parse(it) }
         )
     }
@@ -335,6 +338,10 @@ class SyncPreferencesRepository @Inject constructor(
 
     suspend fun setDiscordRichPresenceEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.DISCORD_RICH_PRESENCE_ENABLED] = enabled }
+    }
+
+    suspend fun setSocialSuppressNotificationsInGame(enabled: Boolean) {
+        dataStore.edit { it[Keys.SOCIAL_SUPPRESS_NOTIFICATIONS_IN_GAME] = enabled }
     }
 
     suspend fun setLastPlaySessionSyncTime(time: Instant) {

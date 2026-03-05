@@ -719,6 +719,7 @@ class SettingsViewModel @Inject constructor(
                         showNowPlaying = prefs.socialShowNowPlaying,
                         notifyFriendOnline = prefs.socialNotifyFriendOnline,
                         notifyFriendPlaying = prefs.socialNotifyFriendPlaying,
+                        suppressNotificationsInGame = prefs.socialSuppressNotificationsInGame,
                         discordLinked = socialRepository.discordLinked.value,
                         discordUsername = socialRepository.discordUsername.value,
                         discordRichPresenceEnabled = prefs.discordRichPresenceEnabled,
@@ -782,6 +783,10 @@ class SettingsViewModel @Inject constructor(
                     }
                     is com.nendo.argosy.ui.screens.settings.sections.SocialItem.NotifyFriendPlaying -> {
                         if (state.social.onlineStatusEnabled) setSocialNotifyFriendPlaying(!state.social.notifyFriendPlaying)
+                        InputResult.handled(SoundType.TOGGLE)
+                    }
+                    is com.nendo.argosy.ui.screens.settings.sections.SocialItem.SuppressInGame -> {
+                        if (state.social.onlineStatusEnabled) setSocialSuppressNotificationsInGame(!state.social.suppressNotificationsInGame)
                         InputResult.handled(SoundType.TOGGLE)
                     }
                     is com.nendo.argosy.ui.screens.settings.sections.SocialItem.Unlink -> {
@@ -888,6 +893,15 @@ class SettingsViewModel @Inject constructor(
             preferencesRepository.setSocialNotifyFriendPlaying(enabled)
             _uiState.update { it.copy(social = it.social.copy(
                 notifyFriendPlaying = enabled
+            )) }
+        }
+    }
+
+    fun setSocialSuppressNotificationsInGame(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setSocialSuppressNotificationsInGame(enabled)
+            _uiState.update { it.copy(social = it.social.copy(
+                suppressNotificationsInGame = enabled
             )) }
         }
     }

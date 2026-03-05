@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.Log
+import com.nendo.argosy.data.emulator.PlaySessionTracker
 import com.nendo.argosy.data.local.dao.GameDao
 import com.nendo.argosy.data.local.dao.PlaySessionDao
 import com.nendo.argosy.data.preferences.UserPreferencesRepository
@@ -37,7 +38,8 @@ class SocialRepository @Inject constructor(
     private val playSessionDao: PlaySessionDao,
     private val gameDao: GameDao,
     private val notificationManager: NotificationManager,
-    private val discordTokenHolder: DiscordTokenHolder
+    private val discordTokenHolder: DiscordTokenHolder,
+    private val playSessionTracker: PlaySessionTracker
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var hasCompletedInitialSync = false
@@ -653,6 +655,7 @@ class SocialRepository @Inject constructor(
         scope.launch {
             val prefs = preferencesRepository.userPreferences.first()
             if (!prefs.socialOnlineStatusEnabled) return@launch
+            if (prefs.socialSuppressNotificationsInGame && playSessionTracker.activeSession.value != null) return@launch
 
             val wasOfflineOrAway = oldPresence == null ||
                 oldPresence == PresenceStatus.OFFLINE ||

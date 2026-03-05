@@ -694,6 +694,7 @@ data class SocialState(
     val showNowPlaying: Boolean = true,
     val notifyFriendOnline: Boolean = true,
     val notifyFriendPlaying: Boolean = true,
+    val suppressNotificationsInGame: Boolean = false,
     val discordLinked: Boolean = false,
     val discordUsername: String? = null,
     val discordRichPresenceEnabled: Boolean = true,

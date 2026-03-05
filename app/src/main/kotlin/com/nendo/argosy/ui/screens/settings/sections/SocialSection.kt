@@ -78,6 +78,7 @@ internal sealed class SocialItem(
     data object ShowNowPlaying : SocialItem("showNowPlaying", "privacy")
     data object NotifyFriendOnline : SocialItem("notifyFriendOnline", "notifications")
     data object NotifyFriendPlaying : SocialItem("notifyFriendPlaying", "notifications")
+    data object SuppressInGame : SocialItem("suppressInGame", "notifications")
     data object Unlink : SocialItem("unlink", "unlink")
 
     companion object {
@@ -90,7 +91,7 @@ internal sealed class SocialItem(
         val ALL: List<SocialItem> = listOf(
             AccountHeader, AccountInfo,
             PrivacyHeader, OnlineStatus, ShowNowPlaying,
-            NotificationsSpacer, NotificationsHeader, NotifyFriendOnline, NotifyFriendPlaying,
+            NotificationsSpacer, NotificationsHeader, NotifyFriendOnline, NotifyFriendPlaying, SuppressInGame,
             UnlinkSpacer, Unlink
         )
     }
@@ -246,6 +247,20 @@ fun SocialSection(uiState: SettingsUiState, viewModel: SettingsViewModel) {
                             isEnabled = social.notifyFriendPlaying && social.onlineStatusEnabled,
                             isFocused = isFocused(item),
                             onToggle = { if (social.onlineStatusEnabled) viewModel.setSocialNotifyFriendPlaying(it) }
+                        )
+
+                        SocialItem.SuppressInGame -> SwitchPreference(
+                            title = "Mute While Playing",
+                            subtitle = if (!social.onlineStatusEnabled) {
+                                "Enable Online Status first"
+                            } else if (social.suppressNotificationsInGame) {
+                                "Friend notifications hidden during gameplay"
+                            } else {
+                                "Friend notifications always shown"
+                            },
+                            isEnabled = social.suppressNotificationsInGame && social.onlineStatusEnabled,
+                            isFocused = isFocused(item),
+                            onToggle = { if (social.onlineStatusEnabled) viewModel.setSocialSuppressNotificationsInGame(it) }
                         )
 
                         SocialItem.Unlink -> ActionPreference(
