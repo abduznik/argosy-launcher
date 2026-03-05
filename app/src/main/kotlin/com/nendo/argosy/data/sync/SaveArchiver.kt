@@ -557,12 +557,18 @@ class SaveArchiver @Inject constructor(
 
     fun copyFileToPath(source: File, targetPath: String): Boolean = fal.copyFile(source.absolutePath, targetPath)
 
-    /**
-     * Calculate file hash at a path, handling restricted Android/data paths.
-     */
     fun calculateFileHashAtPath(path: String): String {
-        val file = getFileForPath(path)
-        return calculateFileHash(file)
+        val md = MessageDigest.getInstance("MD5")
+        val input = openInputStreamForPath(path)
+            ?: throw IllegalStateException("Cannot open input stream for path: $path")
+        input.buffered().use { buffered ->
+            val buffer = ByteArray(BUFFER_SIZE)
+            var bytesRead: Int
+            while (buffered.read(buffer).also { bytesRead = it } != -1) {
+                md.update(buffer, 0, bytesRead)
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
     }
 
     fun calculateFileHash(file: File): String {
@@ -577,37 +583,36 @@ class SaveArchiver @Inject constructor(
         return md.digest().joinToString("") { "%02x".format(it) }
     }
 
-    /**
-     * Mirrors RomM server's `compute_zip_hash()`: sort entries alphabetically,
-     * skip directories, MD5 each file individually, build "name:md5hex" lines
-     * joined by newline, then MD5 that combined string.
-     */
     fun calculateZipHash(file: File): String {
         ZipArchiveInputStream(BufferedInputStream(FileInputStream(file))).use { zis ->
-            val entries = mutableListOf<Pair<String, String>>()
-            var entry = zis.nextEntry
-            while (entry != null) {
-                if (!entry.isDirectory) {
-                    val md = MessageDigest.getInstance("MD5")
-                    val buffer = ByteArray(BUFFER_SIZE)
-                    var bytesRead: Int
-                    while (zis.read(buffer).also { bytesRead = it } != -1) {
-                        md.update(buffer, 0, bytesRead)
-                    }
-                    val fileHash = md.digest()
-                        .joinToString("") { "%02x".format(it) }
-                    entries.add(entry.name to fileHash)
-                }
-                entry = zis.nextEntry
-            }
-            entries.sortBy { it.first }
-            val combined = entries
-                .joinToString("\n") { "${it.first}:${it.second}" }
-            val finalMd = MessageDigest.getInstance("MD5")
-            finalMd.update(combined.toByteArray(Charsets.UTF_8))
-            return finalMd.digest()
-                .joinToString("") { "%02x".format(it) }
+            return calculateZipHashFromStream(zis)
         }
+    }
+
+    private fun calculateZipHashFromStream(zis: ZipArchiveInputStream): String {
+        val entries = mutableListOf<Pair<String, String>>()
+        var entry = zis.nextEntry
+        while (entry != null) {
+            if (!entry.isDirectory) {
+                val md = MessageDigest.getInstance("MD5")
+                val buffer = ByteArray(BUFFER_SIZE)
+                var bytesRead: Int
+                while (zis.read(buffer).also { bytesRead = it } != -1) {
+                    md.update(buffer, 0, bytesRead)
+                }
+                val fileHash = md.digest()
+                    .joinToString("") { "%02x".format(it) }
+                entries.add(entry.name to fileHash)
+            }
+            entry = zis.nextEntry
+        }
+        entries.sortBy { it.first }
+        val combined = entries
+            .joinToString("\n") { "${it.first}:${it.second}" }
+        val finalMd = MessageDigest.getInstance("MD5")
+        finalMd.update(combined.toByteArray(Charsets.UTF_8))
+        return finalMd.digest()
+            .joinToString("") { "%02x".format(it) }
     }
 
     /**
@@ -632,29 +637,48 @@ class SaveArchiver @Inject constructor(
         return finalMd.digest().joinToString("") { "%02x".format(it) }
     }
 
-    /**
-     * Dispatch matching RomM server's `compute_content_hash()`:
-     * route ZIP files to [calculateZipHash], plain files to [calculateFileHash].
-     */
     fun calculateContentHash(file: File): String {
         return if (isZipFile(file)) calculateZipHash(file)
         else calculateFileHash(file)
     }
 
+    fun calculateContentHashAtPath(path: String): String {
+        return if (isZipFileAtPath(path)) {
+            val input = openInputStreamForPath(path)
+                ?: throw IllegalStateException("Cannot open input stream for path: $path")
+            ZipArchiveInputStream(BufferedInputStream(input)).use { zis ->
+                calculateZipHashFromStream(zis)
+            }
+        } else {
+            calculateFileHashAtPath(path)
+        }
+    }
+
     private fun isZipFile(file: File): Boolean {
         if (file.length() < 4) return false
         file.inputStream().use { stream ->
-            val magic = ByteArray(4)
-            if (stream.read(magic) < 4) return false
-            return magic[0] == 0x50.toByte() &&
-                magic[1] == 0x4B.toByte() &&
-                (magic[2] == 0x03.toByte() ||
-                    magic[2] == 0x05.toByte() ||
-                    magic[2] == 0x07.toByte()) &&
-                (magic[3] == 0x04.toByte() ||
-                    magic[3] == 0x06.toByte() ||
-                    magic[3] == 0x08.toByte())
+            return checkZipMagic(stream)
         }
+    }
+
+    private fun isZipFileAtPath(path: String): Boolean {
+        val input = openInputStreamForPath(path) ?: return false
+        input.use { stream ->
+            return checkZipMagic(stream)
+        }
+    }
+
+    private fun checkZipMagic(stream: InputStream): Boolean {
+        val magic = ByteArray(4)
+        if (stream.read(magic) < 4) return false
+        return magic[0] == 0x50.toByte() &&
+            magic[1] == 0x4B.toByte() &&
+            (magic[2] == 0x03.toByte() ||
+                magic[2] == 0x05.toByte() ||
+                magic[2] == 0x07.toByte()) &&
+            (magic[3] == 0x04.toByte() ||
+                magic[3] == 0x06.toByte() ||
+                magic[3] == 0x08.toByte())
     }
 
     data class HardcoreTrailer(val version: Int)

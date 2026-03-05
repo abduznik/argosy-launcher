@@ -310,12 +310,40 @@ object ChdReader {
         }
     }
 
+    fun extractPSXSerial(file: File): String? {
+        return try {
+            RandomAccessFile(file, "r").use { raf ->
+                val header = readHeader(raf) ?: return null
+                val entries = parseMap(raf, header) ?: return null
+
+                val neededBytes = 101 * 2048
+                val neededHunks = (neededBytes + header.hunkBytes - 1) / header.hunkBytes
+                val hunksToRead = minOf(neededHunks, entries.size)
+
+                val data = decompressHunks(raf, header, entries, hunksToRead) ?: return null
+                findPSXBootSerial(data)
+            }
+        } catch (e: Exception) {
+            Logger.warn(TAG, "Failed to extract PSX serial from CHD | file=${file.name}", e)
+            null
+        }
+    }
+
     private fun findBootSerial(data: ByteArray): String? {
         val text = String(data, Charsets.ISO_8859_1)
         val pattern = Regex("""BOOT2\s*=\s*cdrom0:\\([A-Z]{4})_(\d{3})\.(\d{2});""")
         val match = pattern.find(text) ?: return null
         val serial = "${match.groupValues[1]}-${match.groupValues[2]}${match.groupValues[3]}"
         Logger.debug(TAG, "Found PS2 serial from CHD: $serial")
+        return serial
+    }
+
+    private fun findPSXBootSerial(data: ByteArray): String? {
+        val text = String(data, Charsets.ISO_8859_1)
+        val pattern = Regex("""BOOT\s*=\s*cdrom:\\?([A-Z]{4})[_.](\d{3})\.(\d{2});""")
+        val match = pattern.find(text) ?: return null
+        val serial = "${match.groupValues[1]}-${match.groupValues[2]}${match.groupValues[3]}"
+        Logger.debug(TAG, "Found PSX serial from CHD: $serial")
         return serial
     }
 

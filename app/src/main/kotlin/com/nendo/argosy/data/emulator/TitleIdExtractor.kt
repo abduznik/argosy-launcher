@@ -38,6 +38,7 @@ class TitleIdExtractor @Inject constructor(
             "wiiu" -> extractWiiUTitleIdWithSource(romFile)
             "wii" -> extractWiiTitleId(romFile)?.let { TitleIdResult(it, true) }
             "ps2" -> extractPS2Serial(romFile)
+            "psx" -> extractPSXSerial(romFile)
             else -> null
         }
         Logger.debug(TAG, "[SaveSync] DETECT | Title ID extraction result | file=${romFile.name}, platform=$platformId, titleId=${result?.titleId}, fromBinary=${result?.fromBinary}")
@@ -578,6 +579,114 @@ class TitleIdExtractor @Inject constructor(
             }
         } catch (e: Exception) {
             Logger.warn(TAG, "[SaveSync] DETECT | Failed to read PS2 ISO | file=${romFile.name}", e)
+            null
+        }
+    }
+
+    fun extractPSXSerial(romFile: File): TitleIdResult? {
+        val ext = romFile.extension.lowercase()
+
+        when (ext) {
+            "iso", "bin" -> extractPSXSerialFromIso(romFile)?.let {
+                Logger.debug(TAG, "[SaveSync] DETECT | PSX serial from ISO | file=${romFile.name}, serial=$it")
+                return TitleIdResult(it, fromBinary = true)
+            }
+            "chd" -> ChdReader.extractPSXSerial(romFile)?.let {
+                Logger.debug(TAG, "[SaveSync] DETECT | PSX serial from CHD | file=${romFile.name}, serial=$it")
+                return TitleIdResult(it, fromBinary = true)
+            }
+        }
+
+        val filename = romFile.nameWithoutExtension
+        val serialPattern = Regex("""\[?([A-Z]{4}-\d{5})\]?""")
+        serialPattern.find(filename)?.let {
+            val serial = it.groupValues[1]
+            Logger.debug(TAG, "[SaveSync] DETECT | PSX serial from filename | file=${romFile.name}, serial=$serial")
+            return TitleIdResult(serial, fromBinary = false)
+        }
+
+        val parenPattern = Regex("""\(([A-Z]{4}-\d{5})\)""")
+        parenPattern.find(filename)?.let {
+            val serial = it.groupValues[1]
+            Logger.debug(TAG, "[SaveSync] DETECT | PSX serial from filename (paren) | file=${romFile.name}, serial=$serial")
+            return TitleIdResult(serial, fromBinary = false)
+        }
+
+        return null
+    }
+
+    private fun extractPSXSerialFromIso(romFile: File): String? {
+        return try {
+            RandomAccessFile(romFile, "r").use { raf ->
+                val sectorSize = 2048
+
+                val pvdOffset = 16L * sectorSize
+                if (raf.length() < pvdOffset + sectorSize) return null
+                raf.seek(pvdOffset)
+                val pvd = ByteArray(sectorSize)
+                raf.readFully(pvd)
+
+                if (pvd[0].toInt() != 1) return null
+                val magic = String(pvd, 1, 5, Charsets.US_ASCII)
+                if (magic != "CD001") return null
+
+                val rootExtentLba = pvd.readLE32(156 + 2)
+                val rootDataLen = pvd.readLE32(156 + 10)
+
+                val rootOffset = rootExtentLba.toLong() * sectorSize
+                val rootLen = rootDataLen.coerceAtMost(sectorSize * 4)
+                if (raf.length() < rootOffset + rootLen) return null
+                raf.seek(rootOffset)
+                val rootDir = ByteArray(rootLen)
+                raf.readFully(rootDir)
+
+                var pos = 0
+                var systemCnfLba = -1
+                var systemCnfLen = 0
+                while (pos < rootLen) {
+                    val recordLen = rootDir[pos].toInt() and 0xFF
+                    if (recordLen == 0) {
+                        pos = ((pos / sectorSize) + 1) * sectorSize
+                        continue
+                    }
+                    if (pos + recordLen > rootLen) break
+
+                    val nameLen = rootDir[pos + 32].toInt() and 0xFF
+                    if (nameLen > 0 && pos + 33 + nameLen <= rootLen) {
+                        val name = String(rootDir, pos + 33, nameLen, Charsets.US_ASCII)
+                        if (name.equals("SYSTEM.CNF;1", ignoreCase = true) ||
+                            name.equals("SYSTEM.CNF", ignoreCase = true)) {
+                            systemCnfLba = rootDir.readLE32(pos + 2)
+                            systemCnfLen = rootDir.readLE32(pos + 10)
+                            break
+                        }
+                    }
+                    pos += recordLen
+                }
+
+                if (systemCnfLba < 0) {
+                    Logger.debug(TAG, "[SaveSync] DETECT | PSX SYSTEM.CNF not found in root dir | file=${romFile.name}")
+                    return null
+                }
+
+                val cnfOffset = systemCnfLba.toLong() * sectorSize
+                val cnfLen = systemCnfLen.coerceAtMost(sectorSize)
+                if (raf.length() < cnfOffset + cnfLen) return null
+                raf.seek(cnfOffset)
+                val cnfData = ByteArray(cnfLen)
+                raf.readFully(cnfData)
+
+                val cnfText = String(cnfData, Charsets.ISO_8859_1)
+                val pattern = Regex("""BOOT\s*=\s*cdrom:\\?([A-Z]{4})[_.](\d{3})\.(\d{2});""")
+                val match = pattern.find(cnfText)
+                if (match == null) {
+                    Logger.debug(TAG, "[SaveSync] DETECT | PSX BOOT regex didn't match | cnf=${cnfText.take(120).trim()}")
+                    return null
+                }
+                "${match.groupValues[1]}-${match.groupValues[2]}${match.groupValues[3]}"
+            }
+        } catch (e: Exception) {
+            Logger.warn(TAG, "[SaveSync] DETECT | Failed to read PSX ISO | file=${romFile.name}", e)
             null
         }
     }

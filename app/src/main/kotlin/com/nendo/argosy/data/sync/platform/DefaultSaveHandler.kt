@@ -27,7 +27,6 @@ class DefaultSaveHandler @Inject constructor(
                 return@withContext null
             }
 
-            // File-based: return as-is, no zipping needed
             Logger.debug(TAG, "prepareForUpload: Using file directly | path=$localPath, size=${file.length()}")
             PreparedSave(file, isTemporary = false, listOf(localPath))
         }

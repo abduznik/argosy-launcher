@@ -131,6 +131,22 @@ class SavePathResolver @Inject constructor(
             }
         }
 
+        if (platformSlug == "psx" && romPath != null) {
+            val psxSave = discoverPSXSavePath(config, romPath, emulatorPackage)
+            if (psxSave != null) {
+                Logger.debug(TAG, "discoverSavePath: PSX save found at $psxSave")
+                emulatorSaveConfigDao.upsert(
+                    EmulatorSaveConfigEntity(
+                        emulatorId = effectiveEmulatorId,
+                        savePathPattern = File(psxSave).parent ?: "",
+                        isAutoDetected = true,
+                        lastVerifiedAt = Instant.now()
+                    )
+                )
+                return@withContext psxSave
+            }
+        }
+
         val basePathOverride = if (isRetroArch && userConfig?.isUserOverride == true) {
             userConfig.savePathPattern
         } else null
@@ -317,6 +333,28 @@ class SavePathResolver @Inject constructor(
         return null
     }
 
+    private fun discoverPSXSavePath(
+        config: SavePathConfig,
+        romPath: String,
+        emulatorPackage: String?
+    ): String? {
+        val romNameNoExt = File(romPath).nameWithoutExtension
+        val resolvedPaths = SavePathRegistry.resolvePathWithPackage(config, emulatorPackage)
+
+        // DuckStation PerGameFileTitle mode: {romFilenameNoExt}_1.mcd
+        for (basePath in resolvedPaths) {
+            if (!fal.exists(basePath) || !fal.isDirectory(basePath)) continue
+            val mcdPath = "$basePath/${romNameNoExt}_1.mcd"
+            if (fal.exists(mcdPath) && fal.isFile(mcdPath)) {
+                Logger.debug(TAG, "[SaveSync] DISCOVER | PSX memcard found | path=$mcdPath")
+                return mcdPath
+            }
+        }
+
+        Logger.debug(TAG, "[SaveSync] DISCOVER | PSX memcard not found | rom=$romNameNoExt")
+        return null
+    }
+
     private fun discoverGciSavePath(
         config: SavePathConfig,
         romPath: String,
@@ -469,6 +507,11 @@ class SavePathResolver @Inject constructor(
             resolvedPaths.firstOrNull { directoryExists(it) }
                 ?: resolvedPaths.firstOrNull()
         } ?: return null
+
+        if (platformSlug == "psx" && romPath != null) {
+            val romNameNoExt = File(romPath).nameWithoutExtension
+            return "$baseDir/${romNameNoExt}_1.mcd"
+        }
 
         val extension = config.saveExtensions.firstOrNull { it != "*" } ?: "sav"
         val sanitizedName = sanitizeFileName(gameTitle)

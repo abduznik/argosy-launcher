@@ -270,15 +270,17 @@ object SavePathRegistry {
             saveExtensions = listOf("sav")
         ),
 
-        // PS1 - uses shared memory cards, not yet supported
+        // PS1 - DuckStation per-game memory cards ({name}_1.mcd)
+        // Disabled: DuckStation creates files with 600 permissions (no group read),
+        // blocking content reads via the Unicode bypass. Re-enable when rooted or
+        // if upstream fixes file permissions to 660.
         "duckstation" to SavePathConfig(
             emulatorId = "duckstation",
             defaultPaths = listOf(
                 "{extStorage}/Android/data/com.github.stenzek.duckstation/files/memcards",
                 "{extStorage}/duckstation/memcards"
             ),
-            saveExtensions = listOf("mcd", "mcr"),
-            usesSharedMemoryCard = true,
+            saveExtensions = listOf("mcd"),
             supported = false
         ),
 
@@ -476,7 +478,8 @@ object SavePathRegistry {
         "it.dbtecno.pizzaboy" to "pizza_boy_gb",
         "info.cemu.cemu" to "cemu",
         "org.vita3k.emulator" to "vita3k",
-        "org.vita3k.emulator.ikhoeyZX" to "vita3k-zx"
+        "org.vita3k.emulator.ikhoeyZX" to "vita3k-zx",
+        "com.github.stenzek.duckstation" to "duckstation"
     )
 
     private val packagePrefixToConfigId = mapOf(
