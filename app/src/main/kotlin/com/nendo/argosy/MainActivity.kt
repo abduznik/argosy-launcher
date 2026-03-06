@@ -535,14 +535,15 @@ class MainActivity : ComponentActivity() {
             imageCacheManager.resumePendingLogoCache()
             imageCacheManager.resumePendingBadgeCache()
 
-            if (prefs.ambientLedEnabled &&
-                !screenCaptureManager.hasPermission.value &&
-                !screenCapturePromptedThisSession
-            ) {
-                screenCapturePromptedThisSession = true
-                screenCaptureManager.requestPermission(
-                    this@MainActivity, screenCaptureLauncher
-                )
+            if (prefs.ambientLedEnabled) {
+                if (screenCaptureManager.hasPermission.value && !screenCaptureManager.isCapturing.value) {
+                    screenCaptureManager.startCapture()
+                } else if (!screenCaptureManager.hasPermission.value && !screenCapturePromptedThisSession) {
+                    screenCapturePromptedThisSession = true
+                    screenCaptureManager.requestPermission(
+                        this@MainActivity, screenCaptureLauncher
+                    )
+                }
             }
         }
     }

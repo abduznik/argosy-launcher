@@ -202,6 +202,7 @@ class DualScreenManager(
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {
+            if (!displayAffinityHelper.isPhysicalDisplay(displayId)) return
             val resolver = DisplayRoleResolver(displayAffinityHelper, sessionStateStore)
             val newSwapped = resolver.isSwapped
             if (newSwapped != isRolesSwapped) {

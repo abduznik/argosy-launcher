@@ -17,25 +17,26 @@ class DisplayAffinityHelper @Inject constructor(
 ) {
     private val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
 
+    private val physicalDisplays: Array<Display>
+        get() = displayManager.displays.filter { !it.isVirtualDisplay() }.toTypedArray()
+
     val hasSecondaryDisplay: Boolean
-        get() = displayManager.displays.size > 1
+        get() = physicalDisplays.size > 1
 
     val secondaryDisplayType: SecondaryDisplayType
         get() {
-            val secondary = displayManager.displays.getOrNull(1) ?: return SecondaryDisplayType.NONE
-            val type = try {
-                Display::class.java.getMethod("getType").invoke(secondary) as? Int
-            } catch (_: Exception) { null }
+            val secondary = physicalDisplays.getOrNull(1) ?: return SecondaryDisplayType.NONE
+            val type = secondary.displayType()
             return when {
-                type == 2 -> SecondaryDisplayType.EXTERNAL
-                type == 1 -> SecondaryDisplayType.BUILT_IN
+                type == DISPLAY_TYPE_EXTERNAL -> SecondaryDisplayType.EXTERNAL
+                type == DISPLAY_TYPE_BUILT_IN -> SecondaryDisplayType.BUILT_IN
                 secondary.flags and Display.FLAG_PRESENTATION != 0 -> SecondaryDisplayType.EXTERNAL
                 else -> SecondaryDisplayType.BUILT_IN
             }
         }
 
     private val secondaryDisplayId: Int?
-        get() = displayManager.displays.getOrNull(1)?.displayId
+        get() = physicalDisplays.getOrNull(1)?.displayId
 
     fun registerDisplayListener(
         listener: DisplayManager.DisplayListener,
@@ -73,5 +74,27 @@ class DisplayAffinityHelper @Inject constructor(
         return ActivityOptions.makeBasic()
             .setLaunchDisplayId(targetDisplayId)
             .toBundle()
+    }
+
+    fun isPhysicalDisplay(displayId: Int): Boolean {
+        val display = displayManager.getDisplay(displayId) ?: return false
+        return !display.isVirtualDisplay()
+    }
+
+    companion object {
+        private const val DISPLAY_TYPE_BUILT_IN = 1
+        private const val DISPLAY_TYPE_EXTERNAL = 2
+        private const val DISPLAY_TYPE_VIRTUAL = 5
+
+        private fun Display.displayType(): Int? = try {
+            Display::class.java.getMethod("getType").invoke(this) as? Int
+        } catch (_: Exception) { null }
+
+        private fun Display.isVirtualDisplay(): Boolean {
+            val type = displayType()
+            if (type == DISPLAY_TYPE_VIRTUAL) return true
+            if (type != null) return false
+            return flags and Display.FLAG_PRIVATE != 0
+        }
     }
 }

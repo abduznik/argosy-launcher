@@ -55,18 +55,21 @@ class InputConfigCoordinator(
             inputMapper.setExtendedMappings(mappings)
             inputMapper.setPortResolver { device -> portResolver.getPort(device) }
 
-            val mappedButtons = mappings.mapValues { (_, mapping) ->
-                mapping.keys
-                    .filterIsInstance<InputSource.Button>()
-                    .map { it.keyCode }
-                    .toSet()
-            }
+            val platformIndex = MappingPlatforms.indexForPlatformSlug(platformSlug)
+            val platformButtons = MappingPlatforms.getByIndex(platformIndex).buttons.toSet()
+            val platformKeyCodes = mappings.values.firstOrNull()
+                ?.filter { (_, retroButton) -> retroButton in platformButtons }
+                ?.keys
+                ?.filterIsInstance<InputSource.Button>()
+                ?.map { it.keyCode }
+                ?.toSet()
+                ?: emptySet()
 
             inputConfigRepository.initializeDefaultHotkeys()
             val hotkeys = inputConfigRepository.getEnabledHotkeys()
             hotkeyManager.setHotkeys(hotkeys)
             hotkeyList = inputConfigRepository.getHotkeys()
-            hotkeyManager.setControllerMappedButtons(mappedButtons)
+            hotkeyManager.setPlatformMappedButtons(platformKeyCodes)
             hotkeyManager.setLimitToPlayer1(limitHotkeysToPlayer1)
 
             if (controllerOrder.isNotEmpty()) {
@@ -96,14 +99,6 @@ class InputConfigCoordinator(
             mappings[controller.controllerId] = mapping
         }
         inputMapper.setExtendedMappings(mappings)
-
-        val mappedButtons = mappings.mapValues { (_, mapping) ->
-            mapping.keys
-                .filterIsInstance<InputSource.Button>()
-                .map { it.keyCode }
-                .toSet()
-        }
-        hotkeyManager.setControllerMappedButtons(mappedButtons)
     }
 
     suspend fun refreshHotkeys() {
