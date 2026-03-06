@@ -464,16 +464,22 @@ class RetroAchievementsRepository @Inject constructor(
                 body?.hardcoreUnlocks?.mapTo(ids) { it.id }
                 body?.unlocks?.mapTo(ids) { it.id }
                 val hardcoreIds = body?.hardcoreUnlocks?.map { it.id }?.toSet() ?: emptySet()
-                val timestamps = body?.unlocks
-                    ?.filter { it.`when` != null }
-                    ?.mapNotNull { unlock -> com.nendo.argosy.util.parseTimestamp(unlock.`when`!!)?.let { ts -> unlock.id to ts } }
-                    ?.toMap()
-                    ?: emptyMap()
-                val hardcoreTimestamps = body?.hardcoreUnlocks
-                    ?.filter { it.`when` != null }
-                    ?.mapNotNull { unlock -> com.nendo.argosy.util.parseTimestamp(unlock.`when`!!)?.let { ts -> unlock.id to ts } }
-                    ?.toMap()
-                    ?: emptyMap()
+                val timestamps = (body?.unlocks ?: emptyList())
+                    .filter { it.`when` != null }
+                    .mapNotNull { unlock -> com.nendo.argosy.util.parseTimestamp(unlock.`when`!!)?.let { ts -> unlock.id to ts } }
+                    .toMap()
+                    .toMutableMap()
+                (body?.hardcoreUnlocks ?: emptyList())
+                    .filter { it.`when` != null }
+                    .forEach { unlock ->
+                        if (unlock.id !in timestamps) {
+                            com.nendo.argosy.util.parseTimestamp(unlock.`when`!!)?.let { ts -> timestamps[unlock.id] = ts }
+                        }
+                    }
+                val hardcoreTimestamps = (body?.hardcoreUnlocks ?: emptyList())
+                    .filter { it.`when` != null }
+                    .mapNotNull { unlock -> com.nendo.argosy.util.parseTimestamp(unlock.`when`!!)?.let { ts -> unlock.id to ts } }
+                    .toMap()
                 UnlockData(ids, hardcoreIds, timestamps, hardcoreTimestamps)
             } else {
                 UnlockData(emptySet(), emptySet(), emptyMap(), emptyMap())
