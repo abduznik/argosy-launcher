@@ -42,17 +42,18 @@ class WiiSaveHandler @Inject constructor(
 
     override suspend fun extractDownload(tempFile: File, context: SaveContext): ExtractResult =
         withContext(Dispatchers.IO) {
-            val basePath = resolveBasePath(context.config, null)
-            if (basePath == null) {
-                return@withContext ExtractResult(false, null, "No base path for Wii saves")
+            val targetPath = context.localSavePath ?: run {
+                val basePath = resolveBasePath(context.config, null)
+                if (basePath == null) {
+                    return@withContext ExtractResult(false, null, "No base path for Wii saves")
+                }
+                val titleId = context.titleId
+                if (titleId == null) {
+                    return@withContext ExtractResult(false, null, "No title ID for Wii save")
+                }
+                constructSavePath(basePath, titleId)
             }
 
-            val titleId = context.titleId
-            if (titleId == null) {
-                return@withContext ExtractResult(false, null, "No title ID for Wii save")
-            }
-
-            val targetPath = constructSavePath(basePath, titleId)
             val targetFolder = File(targetPath)
             targetFolder.mkdirs()
 

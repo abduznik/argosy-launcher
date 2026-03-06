@@ -43,19 +43,20 @@ class N3dsSaveHandler @Inject constructor(
 
     override suspend fun extractDownload(tempFile: File, context: SaveContext): ExtractResult =
         withContext(Dispatchers.IO) {
-            val basePath = resolveBasePath(context.config, null)
-            if (basePath == null) {
-                return@withContext ExtractResult(false, null, "No base path for 3DS saves")
-            }
-
-            val titleId = context.titleId
-            if (titleId == null) {
-                return@withContext ExtractResult(false, null, "No title ID for 3DS save")
-            }
-
-            val targetPath = constructSavePath(basePath, titleId)
-            if (targetPath == null) {
-                return@withContext ExtractResult(false, null, "Cannot construct 3DS save path (missing id0/id1 structure)")
+            val targetPath = context.localSavePath ?: run {
+                val basePath = resolveBasePath(context.config, null)
+                if (basePath == null) {
+                    return@withContext ExtractResult(false, null, "No base path for 3DS saves")
+                }
+                val titleId = context.titleId
+                if (titleId == null) {
+                    return@withContext ExtractResult(false, null, "No title ID for 3DS save")
+                }
+                val constructed = constructSavePath(basePath, titleId)
+                if (constructed == null) {
+                    return@withContext ExtractResult(false, null, "Cannot construct 3DS save path (missing id0/id1 structure)")
+                }
+                constructed
             }
 
             val targetFolder = File(targetPath)

@@ -43,17 +43,18 @@ class PS2SaveHandler @Inject constructor(
 
     override suspend fun extractDownload(tempFile: File, context: SaveContext): ExtractResult =
         withContext(Dispatchers.IO) {
-            val basePath = resolveBasePath(context.config, null)
-            if (basePath == null) {
-                return@withContext ExtractResult(false, null, "No base path for PS2 saves")
+            val targetPath = context.localSavePath ?: run {
+                val basePath = resolveBasePath(context.config, null)
+                if (basePath == null) {
+                    return@withContext ExtractResult(false, null, "No base path for PS2 saves")
+                }
+                val serial = context.titleId
+                if (serial == null) {
+                    return@withContext ExtractResult(false, null, "No serial for PS2 save")
+                }
+                constructSavePath(basePath, serial)
             }
 
-            val serial = context.titleId
-            if (serial == null) {
-                return@withContext ExtractResult(false, null, "No serial for PS2 save")
-            }
-
-            val targetPath = constructSavePath(basePath, serial)
             val targetFolder = File(targetPath)
             targetFolder.mkdirs()
 

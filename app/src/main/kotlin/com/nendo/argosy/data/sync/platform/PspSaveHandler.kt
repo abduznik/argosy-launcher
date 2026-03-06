@@ -42,17 +42,18 @@ class PspSaveHandler @Inject constructor(
 
     override suspend fun extractDownload(tempFile: File, context: SaveContext): ExtractResult =
         withContext(Dispatchers.IO) {
-            val basePath = resolveBasePath(context.config, null)
-            if (basePath == null) {
-                return@withContext ExtractResult(false, null, "No base path for PSP saves")
+            val targetPath = context.localSavePath ?: run {
+                val basePath = resolveBasePath(context.config, null)
+                if (basePath == null) {
+                    return@withContext ExtractResult(false, null, "No base path for PSP saves")
+                }
+                val titleId = context.titleId
+                if (titleId == null) {
+                    return@withContext ExtractResult(false, null, "No title ID for PSP save")
+                }
+                constructSavePath(basePath, titleId)
             }
 
-            val titleId = context.titleId
-            if (titleId == null) {
-                return@withContext ExtractResult(false, null, "No title ID for PSP save")
-            }
-
-            val targetPath = constructSavePath(basePath, titleId)
             val targetFolder = File(targetPath)
             targetFolder.mkdirs()
 
