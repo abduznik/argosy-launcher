@@ -878,7 +878,7 @@ class SaveSyncApiClient @Inject constructor(
                 targetPath = if (isSwitchEmulator && config != null) {
                     val resolved = preDownloadTargetPath
                         ?: savePathResolver.resolveSwitchSaveTargetPath(tempZipFile, config, emulatorPackage)
-                        ?: savePathResolver.constructFolderSavePath(resolvedEmulatorId, game.platformSlug, game.localPath, emulatorPackage)
+                        ?: savePathResolver.constructFolderSavePathWithOverride(resolvedEmulatorId, game.platformSlug, game.localPath, gameId, game.title, game.titleId, emulatorPackage)
                     if (resolved == null) {
                         Logger.error(TAG, "[SaveSync] DOWNLOAD gameId=$gameId | Cannot determine Switch save path from ZIP or ROM")
                         return@withContext SaveSyncResult.Error("Cannot determine save path from ZIP or ROM")

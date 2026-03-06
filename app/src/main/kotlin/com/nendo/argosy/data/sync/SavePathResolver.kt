@@ -587,36 +587,6 @@ class SavePathResolver @Inject constructor(
         return result
     }
 
-    fun constructFolderSavePath(
-        emulatorId: String,
-        platformSlug: String,
-        romPath: String?,
-        emulatorPackage: String? = null
-    ): String? {
-        if (romPath == null) return null
-
-        val config = SavePathRegistry.getConfigForPlatform(emulatorId, platformSlug) ?: return null
-        if (!config.usesFolderBasedSaves) return null
-
-        val romFile = File(romPath)
-        val titleId = titleIdExtractor.extractTitleId(romFile, platformSlug, emulatorPackage) ?: return null
-
-        val baseDir = config.defaultPaths.firstOrNull { directoryExists(it) }
-            ?: config.defaultPaths.firstOrNull()
-            ?: return null
-
-        return when (platformSlug) {
-            "vita", "psvita" -> vitaSaveHandler.constructSavePath(baseDir, titleId)
-            "switch" -> switchSaveHandler.constructSavePath(baseDir, titleId, emulatorPackage)
-            "3ds" -> n3dsSaveHandler.constructSavePath(baseDir, titleId)
-            "psp" -> pspSaveHandler.constructSavePath(baseDir, titleId)
-            "wii" -> wiiSaveHandler.constructSavePath(baseDir, titleId)
-            "wiiu" -> wiiUSaveHandler.constructSavePath(baseDir, titleId)
-            "ps2" -> ps2SaveHandler.constructSavePath(baseDir, titleId)
-            else -> null
-        }
-    }
-
     suspend fun constructFolderSavePathWithOverride(
         emulatorId: String,
         platformSlug: String,
