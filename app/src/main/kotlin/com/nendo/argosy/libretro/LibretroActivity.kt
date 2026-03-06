@@ -59,6 +59,7 @@ import com.nendo.argosy.data.preferences.UserPreferencesRepository
 import com.nendo.argosy.data.repository.InputConfigRepository
 import com.nendo.argosy.data.repository.InputSource
 import com.nendo.argosy.data.repository.RetroAchievementsRepository
+import com.nendo.argosy.data.social.SocialRepository
 import com.nendo.argosy.ui.screens.common.AchievementUpdateBus
 import com.nendo.argosy.libretro.ui.cheats.CheatDisplayItem
 import com.nendo.argosy.libretro.ui.cheats.CheatsScreen
@@ -108,6 +109,7 @@ class LibretroActivity : ComponentActivity() {
     @Inject lateinit var achievementUpdateBus: AchievementUpdateBus
     @Inject lateinit var saveCacheManager: SaveCacheManager
     @Inject lateinit var ambientLedManager: AmbientLedManager
+    @Inject lateinit var socialRepository: SocialRepository
     @Inject lateinit var effectiveLibretroSettingsResolver: EffectiveLibretroSettingsResolver
     @Inject lateinit var platformLibretroSettingsDao: com.nendo.argosy.data.local.dao.PlatformLibretroSettingsDao
     @Inject lateinit var frameRegistry: FrameRegistry
@@ -721,6 +723,7 @@ class LibretroActivity : ComponentActivity() {
             raRepository = raRepository,
             achievementUpdateBus = achievementUpdateBus,
             ambientLedManager = ambientLedManager,
+            socialRepository = socialRepository,
             scope = lifecycleScope,
             context = this
         )

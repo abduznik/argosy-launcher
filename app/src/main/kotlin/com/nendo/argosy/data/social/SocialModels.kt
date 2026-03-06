@@ -166,6 +166,7 @@ object MessageTypes {
     const val REQUEST_GAME_DATA = "request_game_data"
     const val GAME_DATA = "game_data"
     const val CREATE_DOODLE = "create_doodle"
+    const val CREATE_FEED_EVENT = "create_feed_event"
     const val GET_EVENT_COMMENTS = "get_event_comments"
     const val EVENT_COMMENTS = "event_comments"
 

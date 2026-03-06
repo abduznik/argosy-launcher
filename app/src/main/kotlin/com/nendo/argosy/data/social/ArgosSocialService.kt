@@ -553,6 +553,20 @@ class ArgosSocialService @Inject constructor(
         ))
     }
 
+    fun createFeedEvent(
+        eventType: String,
+        igdbId: Long?,
+        gameTitle: String,
+        data: Map<String, Any?>
+    ): Boolean {
+        return send(MessageTypes.CREATE_FEED_EVENT, mapOf(
+            "event_type" to eventType,
+            "igdb_id" to igdbId,
+            "game_title" to gameTitle,
+            "data" to JSONObject(data)
+        ))
+    }
+
     fun createDoodle(
         canvasSize: Int,
         data: String,

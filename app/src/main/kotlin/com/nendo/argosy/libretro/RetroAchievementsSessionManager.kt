@@ -10,6 +10,7 @@ import com.nendo.argosy.data.local.dao.AchievementDao
 import com.nendo.argosy.data.local.dao.GameDao
 import com.nendo.argosy.data.repository.RAAwardResult
 import com.nendo.argosy.data.repository.RetroAchievementsRepository
+import com.nendo.argosy.data.social.SocialRepository
 import com.nendo.argosy.hardware.AmbientLedManager
 import com.nendo.argosy.libretro.ui.AchievementUnlock
 import com.nendo.argosy.libretro.ui.RAConnectionInfo
@@ -30,6 +31,7 @@ class RetroAchievementsSessionManager(
     private val raRepository: RetroAchievementsRepository,
     private val achievementUpdateBus: AchievementUpdateBus,
     private val ambientLedManager: AmbientLedManager,
+    private val socialRepository: SocialRepository,
     private val scope: CoroutineScope,
     private val context: Context
 ) {
@@ -38,6 +40,8 @@ class RetroAchievementsSessionManager(
 
     var gameRaId: Long? = null
         private set
+    private var gameIgdbId: Long? = null
+    private var gameTitle: String = ""
     var raSessionActive: Boolean = false
         private set
     var totalAchievements by mutableIntStateOf(0)
@@ -69,6 +73,8 @@ class RetroAchievementsSessionManager(
 
             val game = gameDao.getById(gameId) ?: return@launch
             gameRaId = game.raId
+            gameIgdbId = game.igdbId
+            gameTitle = game.title
             Log.d(TAG, "Game loaded: title=${game.title}, raId=$gameRaId")
 
             if (gameRaId == null) {
@@ -182,19 +188,23 @@ class RetroAchievementsSessionManager(
                 forHardcoreMode = hardcoreMode
             )
 
-            when (result) {
+            val awardConfirmed = when (result) {
                 is RAAwardResult.Success -> {
                     Log.i(TAG, "Achievement $achievementId awarded to RA successfully")
+                    true
                 }
                 is RAAwardResult.AlreadyAwarded -> {
                     Log.d(TAG, "Achievement $achievementId already awarded on RA")
+                    false
                 }
                 is RAAwardResult.Queued -> {
                     Log.d(TAG, "Achievement $achievementId queued for later submission")
                     com.nendo.argosy.data.sync.AchievementSubmissionWorker.schedule(context)
+                    false
                 }
                 is RAAwardResult.Error -> {
                     Log.e(TAG, "Failed to award achievement to RA: ${result.message}")
+                    false
                 }
             }
 
@@ -220,6 +230,30 @@ class RetroAchievementsSessionManager(
                 )
             )
             Log.d(TAG, "Emitted achievement update: $earnedCount/$totalCount earned for game $gameId")
+
+            if (awardConfirmed) {
+                socialRepository.emitAchievementUnlocked(
+                    igdbId = gameIgdbId,
+                    gameTitle = gameTitle,
+                    achievementRaId = achievementId,
+                    achievementName = info?.title ?: "Achievement",
+                    achievementDescription = info?.description,
+                    points = info?.points ?: 0,
+                    badgeName = info?.badgeName,
+                    isHardcore = hardcoreMode,
+                    earnedCount = earnedCount,
+                    totalCount = totalCount
+                )
+                if (earnedCount == totalCount && totalCount > 0) {
+                    socialRepository.emitPerfectGame(
+                        igdbId = gameIgdbId,
+                        gameTitle = gameTitle,
+                        isHardcore = hardcoreMode,
+                        earnedCount = earnedCount,
+                        totalCount = totalCount
+                    )
+                }
+            }
         }
 
         val badgeUrl = info?.badgeName?.let {
