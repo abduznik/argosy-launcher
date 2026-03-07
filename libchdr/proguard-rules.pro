@@ -1,0 +1,1 @@
+-keep class com.nendo.argosy.libchdr.ChdReader { *; }

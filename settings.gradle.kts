@@ -23,4 +23,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "argosy-launcher"
 include(":app")
+include(":libchdr")
 include(":libretrodroid")

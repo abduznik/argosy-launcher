@@ -206,6 +206,7 @@ dependencies {
     implementation(libs.zstd.jni)
 
     // Libretro (built-in emulation) - local module for customization
+    implementation(project(":libchdr"))
     implementation(project(":libretrodroid"))
 
     // WorkManager
