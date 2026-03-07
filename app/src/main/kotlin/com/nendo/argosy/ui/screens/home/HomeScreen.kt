@@ -10,9 +10,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -37,6 +35,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.lazy.LazyRow
@@ -87,7 +86,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -893,11 +895,6 @@ private fun HomeHeader(
     onNextRow: () -> Unit,
     headerOffset: androidx.compose.ui.unit.Dp = 0.dp
 ) {
-    val aspectRatioClass = com.nendo.argosy.ui.theme.LocalUiScale.current.aspectRatioClass
-    val maxNeighbors = when (aspectRatioClass) {
-        com.nendo.argosy.ui.theme.AspectRatioClass.ULTRA_TALL -> 1
-        else -> 2
-    }
     val rows = uiState.availableRows
     val currentIdx = rows.indexOf(uiState.currentRow).coerceAtLeast(0)
     val navIconTint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
@@ -929,35 +926,104 @@ private fun HomeHeader(
                 )
             }
 
-            AnimatedContent(
-                targetState = currentIdx,
-                transitionSpec = {
-                    val forward = targetState > initialState ||
-                            (initialState == rows.lastIndex && targetState == 0)
-                    val sign = if (forward) 1 else -1
-                    (slideInHorizontally { sign * it / 3 } + fadeIn(tween(200))) togetherWith
-                            (slideOutHorizontally { -sign * it / 3 } + fadeOut(tween(150)))
-                },
-                label = "breadcrumb"
-            ) { _ ->
-                val breadcrumbs = uiState.breadcrumbItems(maxNeighbors)
-                Row(
+            val virtualMultiplier = 10000
+            val virtualSize = if (rows.isNotEmpty()) rows.size * virtualMultiplier else 0
+
+            fun virtualCenterFor(idx: Int): Int =
+                if (rows.isNotEmpty()) (virtualMultiplier / 2) * rows.size + idx else 0
+
+            var virtualPosition by remember { mutableStateOf(virtualCenterFor(currentIdx)) }
+            var lastCurrentIdx by remember { mutableStateOf(currentIdx) }
+            var lastRowsSize by remember { mutableStateOf(rows.size) }
+
+            LaunchedEffect(rows.size) {
+                if (rows.isEmpty()) return@LaunchedEffect
+                if (rows.size != lastRowsSize) {
+                    virtualPosition = virtualCenterFor(currentIdx)
+                    lastCurrentIdx = currentIdx
+                    lastRowsSize = rows.size
+                }
+            }
+
+            LaunchedEffect(currentIdx) {
+                if (rows.isEmpty() || rows.size != lastRowsSize) return@LaunchedEffect
+                val delta = when {
+                    lastCurrentIdx == rows.lastIndex && currentIdx == 0 -> 1
+                    lastCurrentIdx == 0 && currentIdx == rows.lastIndex -> -1
+                    else -> currentIdx - lastCurrentIdx
+                }
+                virtualPosition += delta
+                lastCurrentIdx = currentIdx
+            }
+
+            val breadcrumbListState = rememberLazyListState(
+                initialFirstVisibleItemIndex = virtualCenterFor(currentIdx)
+            )
+
+            fun centerOffset(): Int {
+                val info = breadcrumbListState.layoutInfo
+                val viewportWidth = info.viewportSize.width
+                val targetItem = info.visibleItemsInfo.firstOrNull { it.index == virtualPosition }
+                val itemWidth = targetItem?.size
+                    ?: info.visibleItemsInfo.firstOrNull()?.size
+                    ?: 0
+                return (viewportWidth - itemWidth) / 2
+            }
+
+            LaunchedEffect(virtualPosition) {
+                if (lastRowsSize == rows.size) {
+                    breadcrumbListState.animateScrollToItem(virtualPosition, -centerOffset())
+                } else {
+                    breadcrumbListState.scrollToItem(virtualPosition, -centerOffset())
+                }
+            }
+
+            val fadeBrush = Brush.horizontalGradient(
+                0f to Color.Transparent,
+                0.15f to Color.Black,
+                0.85f to Color.Black,
+                1f to Color.Transparent
+            )
+
+            Box(
+                modifier = Modifier
+                    .widthIn(max = 360.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                        RoundedCornerShape(Dimens.radiusMd)
+                    )
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush = fadeBrush,
+                            blendMode = BlendMode.DstIn
+                        )
+                    }
+                    .padding(vertical = Dimens.spacingXs)
+            ) {
+                LazyRow(
+                    state = breadcrumbListState,
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Dimens.spacingXs)
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.spacingXs),
+                    contentPadding = PaddingValues(horizontal = 0.dp),
+                    userScrollEnabled = false
                 ) {
-                    breadcrumbs.forEachIndexed { index, item ->
-                        if (index > 0) {
+                    items(virtualSize) { virtualIndex ->
+                        val realIndex = virtualIndex.mod(rows.size)
+                        if (virtualIndex > 0) {
                             Text(
                                 text = "\u00B7",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                                modifier = Modifier.padding(end = Dimens.spacingXs)
                             )
                         }
                         Text(
-                            text = item.label,
-                            style = if (item.isCurrent) MaterialTheme.typography.titleMedium
+                            text = uiState.shortLabelFor(rows[realIndex]),
+                            style = if (virtualIndex == virtualPosition) MaterialTheme.typography.titleMedium
                                     else MaterialTheme.typography.labelMedium,
-                            color = if (item.isCurrent) MaterialTheme.colorScheme.primary
+                            color = if (virtualIndex == virtualPosition) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
                         )
                     }

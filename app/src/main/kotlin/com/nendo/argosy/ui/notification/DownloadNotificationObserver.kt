@@ -35,7 +35,6 @@ class DownloadNotificationObserver @Inject constructor(
                     }
 
                     detectStateChanges(previous, current)
-                    updateStatusBar(current)
                     isInitialLoad = false
                 }
         }
@@ -59,26 +58,6 @@ class DownloadNotificationObserver @Inject constructor(
             if (prevStatus?.state == DownloadState.DOWNLOADING) {
                 notificationManager.dismissByKey("download-$gameId")
             }
-        }
-    }
-
-    private fun updateStatusBar(state: DownloadQueueState) {
-        val active = state.activeDownloads.firstOrNull()
-        if (active != null && active.state == DownloadState.DOWNLOADING) {
-            val progress = if (active.totalBytes > 0) {
-                active.bytesDownloaded.toFloat() / active.totalBytes
-            } else {
-                null
-            }
-            notificationManager.updateStatus(
-                title = "Downloading",
-                subtitle = active.gameTitle,
-                progress = progress
-            )
-        } else if (state.activeDownloads.isEmpty() || state.activeDownloads.all {
-                it.state == DownloadState.COMPLETED || it.state == DownloadState.FAILED || it.state == DownloadState.CANCELLED
-            }) {
-            notificationManager.clearStatus()
         }
     }
 
