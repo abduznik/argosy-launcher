@@ -117,6 +117,7 @@ class ArgosSocialService @Inject constructor(
             val expiresIn: Long
         ) : IncomingMessage()
         data object DiscordNotLinked : IncomingMessage()
+        data class FavoriteFriendUpdated(val friendId: String, val isFavorite: Boolean) : IncomingMessage()
     }
 
     fun connect(token: String) {
@@ -407,6 +408,15 @@ class ArgosSocialService @Inject constructor(
                     } else null
                 }
 
+                MessageTypes.FAVORITE_FRIEND_UPDATED -> {
+                    if (payload != null) {
+                        IncomingMessage.FavoriteFriendUpdated(
+                            friendId = payload.getString("friend_id"),
+                            isFavorite = payload.getBoolean("is_favorite")
+                        )
+                    } else null
+                }
+
                 else -> IncomingMessage.Raw(type, payload?.toString() ?: "{}")
             }
 
@@ -520,6 +530,10 @@ class ArgosSocialService @Inject constructor(
     fun hideEvent(eventId: String) {
         Log.d(TAG, "hideEvent: eventId=$eventId")
         send(MessageTypes.HIDE_EVENT, mapOf("event_id" to eventId))
+    }
+
+    fun toggleFavoriteFriend(friendId: String): Boolean {
+        return send(MessageTypes.TOGGLE_FAVORITE_FRIEND, mapOf("friend_id" to friendId))
     }
 
     fun reportEvent(eventId: String, reason: String? = null) {
@@ -672,7 +686,8 @@ class ArgosSocialService @Inject constructor(
                             coverThumb = gameJson.optString("cover_thumb", null)
                         )
                     },
-                    deviceName = presenceObj?.optString("device_name", null)
+                    deviceName = presenceObj?.optString("device_name", null),
+                    isFavorite = obj.optBoolean("is_favorite", false)
                 )
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to parse friend", e)

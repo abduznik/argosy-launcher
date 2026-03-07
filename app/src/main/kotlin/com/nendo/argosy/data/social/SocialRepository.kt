@@ -228,9 +228,16 @@ class SocialRepository @Inject constructor(
                             }
                         }
                     }
+                    is ArgosSocialService.IncomingMessage.FavoriteFriendUpdated -> {
+                        Log.d(TAG, "Favorite updated: ${message.friendId} -> ${message.isFavorite}")
+                        _friends.value = _friends.value.map { friend ->
+                            if (friend.id == message.friendId) friend.copy(isFavorite = message.isFavorite)
+                            else friend
+                        }.sortedWith(friendComparator)
+                    }
                     is ArgosSocialService.IncomingMessage.FriendsData -> {
                         Log.d(TAG, "Received initial friends: ${message.friends.size}")
-                        _friends.value = message.friends
+                        _friends.value = message.friends.sortedWith(friendComparator)
                         hasCompletedInitialSync = true
                     }
                     is ArgosSocialService.IncomingMessage.SharedCollections -> {
@@ -385,6 +392,12 @@ class SocialRepository @Inject constructor(
     fun requestDiscordTokens() {
         if (socialService.isConnected()) {
             socialService.requestDiscordTokens()
+        }
+    }
+
+    fun toggleFavoriteFriend(friendId: String) {
+        if (socialService.isConnected()) {
+            socialService.toggleFavoriteFriend(friendId)
         }
     }
 
@@ -813,6 +826,9 @@ class SocialRepository @Inject constructor(
     private fun isAppInForeground(): Boolean {
         return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
     }
+
+    private val friendComparator = compareByDescending<Friend> { it.isFavorite }
+        .thenBy { it.displayName.lowercase() }
 
     companion object {
         private const val THUMB_WIDTH = 144

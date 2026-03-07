@@ -383,7 +383,8 @@ class ArgosyViewModel @Inject constructor(
         val sortedFriends = friends
             .filter { it.friendshipStatus.value == "accepted" }
             .sortedWith(
-                compareByDescending<Friend> { it.presence == PresenceStatus.IN_GAME }
+                compareByDescending<Friend> { it.isFavorite }
+                    .thenByDescending { it.presence == PresenceStatus.IN_GAME }
                     .thenByDescending { it.presence == PresenceStatus.ONLINE }
                     .thenBy { it.displayName.lowercase() }
             )
@@ -593,6 +594,18 @@ class ArgosyViewModel @Inject constructor(
         }
 
         override fun onSecondaryAction(): InputResult {
+            if (_drawerTab.value == DrawerTab.FRIENDS) {
+                val friends = drawerUiState.value.friends
+                val index = _friendsFocusIndex.value
+                friends.getOrNull(index)?.let { friend ->
+                    socialRepository.toggleFavoriteFriend(friend.id)
+                }
+                return InputResult.HANDLED
+            }
+            return InputResult.UNHANDLED
+        }
+
+        override fun onContextMenu(): InputResult {
             if (_drawerTab.value == DrawerTab.FRIENDS) {
                 showFriendsOptionsModal()
                 return InputResult.HANDLED

@@ -215,7 +215,8 @@ fun SocialScreen(
                                 friends = uiState.friends,
                                 focusedIndex = uiState.focusedFriendIndex,
                                 listState = friendsListState,
-                                onViewProfile = onViewProfile
+                                onViewProfile = onViewProfile,
+                                onToggleFavorite = { friendId -> viewModel.toggleFavoriteFriend(friendId) }
                             )
                         }
                     }
@@ -253,6 +254,7 @@ fun SocialScreen(
                         }
                         SocialTab.FRIENDS -> {
                             add(FooterHintItem(InputButton.A, "Profile", enabled = uiState.friends.isNotEmpty()))
+                            add(FooterHintItem(InputButton.Y, "Favorite", enabled = uiState.friends.isNotEmpty()))
                         }
                         SocialTab.PROFILE -> {
                             add(FooterHintItem(InputButton.A, "Toggle"))

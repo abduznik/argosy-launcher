@@ -221,6 +221,10 @@ class SocialViewModel @Inject constructor(
         }
     }
 
+    fun toggleFavoriteFriend(friendId: String) {
+        socialRepository.toggleFavoriteFriend(friendId)
+    }
+
     fun likeCurrentEvent() {
         val event = _uiState.value.focusedEvent
         Log.d(TAG, "likeCurrentEvent: event=${event?.id}, currentlyLiked=${event?.isLikedByMe}")
@@ -370,9 +374,18 @@ class SocialViewModel @Inject constructor(
 
         override fun onSecondaryAction(): InputResult {
             if (anyModalShowing()) return InputResult.UNHANDLED
-            if (_uiState.value.selectedTab != SocialTab.FEED) return InputResult.UNHANDLED
-            likeCurrentEvent()
-            return InputResult.HANDLED
+            return when (_uiState.value.selectedTab) {
+                SocialTab.FEED -> {
+                    likeCurrentEvent()
+                    InputResult.HANDLED
+                }
+                SocialTab.FRIENDS -> {
+                    val friend = _uiState.value.friends.getOrNull(_uiState.value.focusedFriendIndex)
+                    friend?.let { toggleFavoriteFriend(it.id) }
+                    InputResult.HANDLED
+                }
+                else -> InputResult.UNHANDLED
+            }
         }
 
         override fun onSelect(): InputResult {

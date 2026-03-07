@@ -19,7 +19,11 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -40,7 +44,8 @@ fun FriendsTabContent(
     friends: List<Friend>,
     focusedIndex: Int,
     listState: LazyListState,
-    onViewProfile: (String) -> Unit
+    onViewProfile: (String) -> Unit,
+    onToggleFavorite: (String) -> Unit = {}
 ) {
     if (friends.isEmpty()) {
         Box(
@@ -74,7 +79,8 @@ fun FriendsTabContent(
             FriendCard(
                 friend = friend,
                 isFocused = index == focusedIndex,
-                onClick = { onViewProfile(friend.id) }
+                onClick = { onViewProfile(friend.id) },
+                onToggleFavorite = { onToggleFavorite(friend.id) }
             )
         }
     }
@@ -84,7 +90,8 @@ fun FriendsTabContent(
 private fun FriendCard(
     friend: Friend,
     isFocused: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit
 ) {
     val shape = RoundedCornerShape(12.dp)
     val borderModifier = if (isFocused) {
@@ -182,6 +189,20 @@ private fun FriendCard(
                     }
                 }
 
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clickableNoFocus(onClick = onToggleFavorite),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (friend.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                    contentDescription = if (friend.isFavorite) "Remove favorite" else "Add favorite",
+                    modifier = Modifier.size(20.dp),
+                    tint = if (friend.isFavorite) Color(0xFFFBBF24) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                )
             }
         }
     }

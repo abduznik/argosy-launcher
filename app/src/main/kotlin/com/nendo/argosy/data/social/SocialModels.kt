@@ -110,7 +110,8 @@ data class Friend(
     val status: String,
     val presence: PresenceStatus? = null,
     @Json(name = "current_game") val currentGame: PresenceGameInfo? = null,
-    @Json(name = "device_name") val deviceName: String? = null
+    @Json(name = "device_name") val deviceName: String? = null,
+    @Json(name = "is_favorite") val isFavorite: Boolean = false
 ) {
     val friendshipStatus: FriendshipStatus
         get() = FriendshipStatus.fromValue(status)
@@ -169,6 +170,10 @@ object MessageTypes {
     const val CREATE_FEED_EVENT = "create_feed_event"
     const val GET_EVENT_COMMENTS = "get_event_comments"
     const val EVENT_COMMENTS = "event_comments"
+
+    // Friend favorites
+    const val TOGGLE_FAVORITE_FRIEND = "toggle_favorite_friend"
+    const val FAVORITE_FRIEND_UPDATED = "favorite_friend_updated"
 
     // Discord token relay
     const val REQUEST_DISCORD_TOKENS = "request_discord_tokens"

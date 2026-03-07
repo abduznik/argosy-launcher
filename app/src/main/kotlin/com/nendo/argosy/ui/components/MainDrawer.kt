@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FeaturedPlayList
@@ -456,13 +457,22 @@ private fun FriendItem(
                 }
             }
         }
+
+        if (friend.isFavorite) {
+            Icon(
+                imageVector = Icons.Filled.Star,
+                contentDescription = "Favorite",
+                modifier = Modifier.size(14.dp),
+                tint = Color(0xFFFBBF24)
+            )
+        }
     }
 }
 
 @Composable
 private fun FriendsFooter() {
     FooterBar(
-        hints = listOf(InputButton.Y to "Options"),
+        hints = listOf(InputButton.Y to "Favorite", InputButton.X to "Options"),
         modifier = Modifier.padding(horizontal = Dimens.spacingMd, vertical = Dimens.spacingSm)
     )
 }
