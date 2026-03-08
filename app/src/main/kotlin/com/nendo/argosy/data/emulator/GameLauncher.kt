@@ -598,9 +598,8 @@ class GameLauncher @Inject constructor(
 
             if (emulator.launchAction == Intent.ACTION_VIEW) {
                 if (config.useFileUri) {
-                    putExtra("path", romFile.absolutePath)
-                    putExtra("file", romFile.absolutePath)
-                    putExtra("filePath", romFile.absolutePath)
+                    val uri = Uri.parse(romFile.absolutePath)
+                    setDataAndType(uri, config.mimeTypeOverride ?: getMimeType(romFile))
                 } else {
                     val uri = getFileUri(romFile)
                     val mimeType = config.mimeTypeOverride ?: getMimeType(romFile)
