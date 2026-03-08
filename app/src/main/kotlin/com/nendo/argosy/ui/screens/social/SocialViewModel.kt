@@ -7,6 +7,7 @@ import com.nendo.argosy.data.preferences.UserPreferencesRepository
 import com.nendo.argosy.data.social.FeedEventDto
 import com.nendo.argosy.data.social.Friend
 import com.nendo.argosy.data.social.SocialConnectionState
+import com.nendo.argosy.data.social.SocialNotification
 import com.nendo.argosy.data.social.SocialRepository
 import com.nendo.argosy.data.social.SocialUser
 import com.nendo.argosy.ui.input.InputHandler
@@ -22,7 +23,7 @@ import javax.inject.Inject
 
 private const val TAG = "SocialViewModel"
 
-enum class SocialTab { FEED, FRIENDS, PROFILE }
+enum class SocialTab { FEED, FRIENDS, NOTIFICATIONS, PROFILE }
 
 private const val PROFILE_TOGGLE_COUNT = 5
 
@@ -31,11 +32,16 @@ data class SocialUiState(
     val selectedTab: SocialTab = SocialTab.FEED,
     val events: List<FeedEventDto> = emptyList(),
     val friends: List<Friend> = emptyList(),
+    val notifications: List<SocialNotification> = emptyList(),
     val focusedEventIndex: Int = 0,
     val focusedFriendIndex: Int = 0,
+    val focusedNotificationIndex: Int = 0,
     val profileFocusIndex: Int = 0,
     val isLoading: Boolean = false,
     val hasMore: Boolean = false,
+    val unreadCount: Int = 0,
+    val isLoadingNotifications: Boolean = false,
+    val notificationsHasMore: Boolean = false,
     val socialOnlineStatus: Boolean = true,
     val socialShowNowPlaying: Boolean = true,
     val socialNotifyFriendOnline: Boolean = true,
@@ -50,6 +56,9 @@ data class SocialUiState(
 
     val focusedEvent: FeedEventDto?
         get() = events.getOrNull(focusedEventIndex)
+
+    val focusedNotification: SocialNotification?
+        get() = notifications.getOrNull(focusedNotificationIndex)
 }
 
 @HiltViewModel
@@ -92,6 +101,34 @@ class SocialViewModel @Inject constructor(
                     Log.d(TAG, "UI state changed: events ${prev.events.size}->${newState.events.size}, loading ${prev.isLoading}->${newState.isLoading}, hasMore=${newState.hasMore}")
                 }
                 _uiState.value = newState
+            }
+        }
+
+        viewModelScope.launch {
+            combine(
+                socialRepository.notifications,
+                socialRepository.unreadCount,
+                socialRepository.isLoadingNotifications,
+                socialRepository.notificationsHasMore
+            ) { notifications, unread, loading, hasMore ->
+                data class NotifState(
+                    val notifications: List<SocialNotification>,
+                    val unread: Int,
+                    val loading: Boolean,
+                    val hasMore: Boolean
+                )
+                NotifState(notifications, unread, loading, hasMore)
+            }.collect { ns ->
+                val current = _uiState.value
+                _uiState.value = current.copy(
+                    notifications = ns.notifications,
+                    unreadCount = ns.unread,
+                    isLoadingNotifications = ns.loading,
+                    notificationsHasMore = ns.hasMore,
+                    focusedNotificationIndex = current.focusedNotificationIndex.coerceIn(
+                        0, ns.notifications.size.coerceAtLeast(1) - 1
+                    )
+                )
             }
         }
 
@@ -168,6 +205,21 @@ class SocialViewModel @Inject constructor(
         return false
     }
 
+    private fun moveNotificationFocus(delta: Int): Boolean {
+        val state = _uiState.value
+        if (state.notifications.isEmpty()) return false
+        val currentIndex = state.focusedNotificationIndex
+        val newIndex = (currentIndex + delta).coerceIn(0, state.notifications.size - 1)
+        if (newIndex != currentIndex) {
+            _uiState.value = state.copy(focusedNotificationIndex = newIndex)
+            if (newIndex >= state.notifications.size - 3 && state.notificationsHasMore && !state.isLoadingNotifications) {
+                socialRepository.loadMoreNotifications()
+            }
+            return true
+        }
+        return false
+    }
+
     private fun moveProfileFocus(delta: Int): Boolean {
         val state = _uiState.value
         val currentIndex = state.profileFocusIndex
@@ -221,6 +273,18 @@ class SocialViewModel @Inject constructor(
         }
     }
 
+    fun loadNotifications() {
+        socialRepository.requestNotifications()
+    }
+
+    fun markNotificationRead(id: String) {
+        socialRepository.markNotificationRead(id)
+    }
+
+    fun markAllNotificationsRead() {
+        socialRepository.markAllNotificationsRead()
+    }
+
     fun toggleFavoriteFriend(friendId: String) {
         socialRepository.toggleFavoriteFriend(friendId)
     }
@@ -271,6 +335,7 @@ class SocialViewModel @Inject constructor(
                 else -> when (_uiState.value.selectedTab) {
                     SocialTab.FEED -> if (moveFocus(-1)) InputResult.HANDLED else InputResult.UNHANDLED
                     SocialTab.FRIENDS -> if (moveFriendFocus(-1)) InputResult.HANDLED else InputResult.UNHANDLED
+                    SocialTab.NOTIFICATIONS -> if (moveNotificationFocus(-1)) InputResult.HANDLED else InputResult.UNHANDLED
                     SocialTab.PROFILE -> if (moveProfileFocus(-1)) InputResult.HANDLED else InputResult.UNHANDLED
                 }
             }
@@ -286,6 +351,7 @@ class SocialViewModel @Inject constructor(
                 else -> when (_uiState.value.selectedTab) {
                     SocialTab.FEED -> if (moveFocus(1)) InputResult.HANDLED else InputResult.UNHANDLED
                     SocialTab.FRIENDS -> if (moveFriendFocus(1)) InputResult.HANDLED else InputResult.UNHANDLED
+                    SocialTab.NOTIFICATIONS -> if (moveNotificationFocus(1)) InputResult.HANDLED else InputResult.UNHANDLED
                     SocialTab.PROFILE -> if (moveProfileFocus(1)) InputResult.HANDLED else InputResult.UNHANDLED
                 }
             }
@@ -345,6 +411,20 @@ class SocialViewModel @Inject constructor(
                     friend?.let { onViewProfile(it.id) }
                     InputResult.HANDLED
                 }
+                SocialTab.NOTIFICATIONS -> {
+                    val notif = _uiState.value.focusedNotification
+                    if (notif != null) {
+                        markNotificationRead(notif.id)
+                        when (notif.type) {
+                            "comment", "like_milestone" -> notif.eventId?.let { onOpenEventDetail(it) }
+                            "friend_request", "friend_accepted", "friend_added" -> {
+                                val delta = SocialTab.FRIENDS.ordinal - _uiState.value.selectedTab.ordinal
+                                switchTab(delta)
+                            }
+                        }
+                    }
+                    InputResult.HANDLED
+                }
                 SocialTab.PROFILE -> {
                     toggleProfilePreference(_uiState.value.profileFocusIndex)
                     InputResult.HANDLED
@@ -384,7 +464,11 @@ class SocialViewModel @Inject constructor(
                     friend?.let { toggleFavoriteFriend(it.id) }
                     InputResult.HANDLED
                 }
-                else -> InputResult.UNHANDLED
+                SocialTab.NOTIFICATIONS -> {
+                    markAllNotificationsRead()
+                    InputResult.HANDLED
+                }
+                SocialTab.PROFILE -> InputResult.UNHANDLED
             }
         }
 

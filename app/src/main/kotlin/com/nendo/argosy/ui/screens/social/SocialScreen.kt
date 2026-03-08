@@ -126,6 +126,7 @@ fun SocialScreen(
     val optionsState by viewModel.feedOptionsDelegate.state.collectAsState()
     val feedListState = rememberLazyListState()
     val friendsListState = rememberLazyListState()
+    val notificationsListState = rememberLazyListState()
     val profileListState = rememberLazyListState()
 
     LaunchedEffect(uiState.isConnected) {
@@ -141,6 +142,22 @@ fun SocialScreen(
             val itemHeight = layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 200
             val centerOffset = (viewportHeight - itemHeight) / 2
             feedListState.animateScrollToItem(uiState.focusedEventIndex, -centerOffset)
+        }
+    }
+
+    LaunchedEffect(uiState.selectedTab) {
+        if (uiState.selectedTab == SocialTab.NOTIFICATIONS && uiState.isConnected && uiState.notifications.isEmpty()) {
+            viewModel.loadNotifications()
+        }
+    }
+
+    LaunchedEffect(uiState.focusedNotificationIndex) {
+        if (uiState.selectedTab == SocialTab.NOTIFICATIONS && uiState.notifications.isNotEmpty() && uiState.focusedNotificationIndex in uiState.notifications.indices) {
+            val layoutInfo = notificationsListState.layoutInfo
+            val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+            val itemHeight = layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 80
+            val centerOffset = (viewportHeight - itemHeight) / 2
+            notificationsListState.animateScrollToItem(uiState.focusedNotificationIndex, -centerOffset)
         }
     }
 
@@ -172,6 +189,7 @@ fun SocialScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             SocialTabBar(
                 selectedTab = uiState.selectedTab,
+                unreadCount = uiState.unreadCount,
                 onTabSelected = { tab ->
                     val delta = tab.ordinal - uiState.selectedTab.ordinal
                     if (delta != 0) viewModel.switchTab(delta)
@@ -220,6 +238,28 @@ fun SocialScreen(
                             )
                         }
                     }
+                    SocialTab.NOTIFICATIONS -> {
+                        if (!uiState.isConnected) {
+                            NotConnectedContent()
+                        } else if (uiState.isLoadingNotifications && uiState.notifications.isEmpty()) {
+                            LoadingContent("Loading notifications...")
+                        } else {
+                            NotificationsTabContent(
+                                notifications = uiState.notifications,
+                                focusedIndex = uiState.focusedNotificationIndex,
+                                listState = notificationsListState,
+                                onNotificationTap = { notif ->
+                                    viewModel.markNotificationRead(notif.id)
+                                    when (notif.type) {
+                                        "comment", "like_milestone" -> notif.eventId?.let { onOpenEventDetail(it) }
+                                        "friend_request", "friend_accepted", "friend_added" -> {
+                                            viewModel.switchTab(SocialTab.FRIENDS.ordinal - uiState.selectedTab.ordinal)
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
                     SocialTab.PROFILE -> {
                         if (!uiState.isConnected) {
                             NotConnectedContent()
@@ -255,6 +295,10 @@ fun SocialScreen(
                         SocialTab.FRIENDS -> {
                             add(FooterHintItem(InputButton.A, "Profile", enabled = uiState.friends.isNotEmpty()))
                             add(FooterHintItem(InputButton.Y, "Favorite", enabled = uiState.friends.isNotEmpty()))
+                        }
+                        SocialTab.NOTIFICATIONS -> {
+                            add(FooterHintItem(InputButton.A, "Open", enabled = uiState.notifications.isNotEmpty()))
+                            add(FooterHintItem(InputButton.Y, "Read All", enabled = uiState.unreadCount > 0))
                         }
                         SocialTab.PROFILE -> {
                             add(FooterHintItem(InputButton.A, "Toggle"))
@@ -302,6 +346,7 @@ fun SocialScreen(
 @Composable
 private fun SocialTabBar(
     selectedTab: SocialTab,
+    unreadCount: Int = 0,
     onTabSelected: (SocialTab) -> Unit
 ) {
     Row(
@@ -325,21 +370,44 @@ private fun SocialTabBar(
                     .padding(vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = when (tab) {
-                        SocialTab.FEED -> "Feed"
-                        SocialTab.FRIENDS -> "Friends"
-                        SocialTab.PROFILE -> "Profile"
-                    },
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    textAlign = TextAlign.Center
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = when (tab) {
+                            SocialTab.FEED -> "Feed"
+                            SocialTab.FRIENDS -> "Friends"
+                            SocialTab.NOTIFICATIONS -> "Alerts"
+                            SocialTab.PROFILE -> "Profile"
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        textAlign = TextAlign.Center
+                    )
+
+                    if (tab == SocialTab.NOTIFICATIONS && unreadCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.error),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (unreadCount > 99) "99+" else unreadCount.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onError,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
             }
         }
     }

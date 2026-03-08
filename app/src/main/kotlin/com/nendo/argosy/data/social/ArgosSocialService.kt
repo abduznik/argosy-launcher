@@ -125,6 +125,16 @@ class ArgosSocialService @Inject constructor(
         data object DiscordNotLinked : IncomingMessage()
         data class SyncAchievementUnlocksResult(val acceptedRaIds: List<Long>) : IncomingMessage()
         data class FavoriteFriendUpdated(val friendId: String, val isFavorite: Boolean) : IncomingMessage()
+        data class UnreadCount(val count: Int) : IncomingMessage()
+        data class NotificationReceived(
+            val notification: SocialNotification,
+            val users: Map<String, SocialUser>
+        ) : IncomingMessage()
+        data class NotificationsData(
+            val notifications: List<SocialNotification>,
+            val users: Map<String, SocialUser>,
+            val hasMore: Boolean
+        ) : IncomingMessage()
     }
 
     fun connect(token: String) {
@@ -443,6 +453,37 @@ class ArgosSocialService @Inject constructor(
                     null
                 }
 
+                MessageTypes.UNREAD_COUNT -> {
+                    val count = payload?.optInt("count", 0) ?: 0
+                    Log.d(TAG, "Unread count: $count")
+                    IncomingMessage.UnreadCount(count)
+                }
+
+                MessageTypes.NOTIFICATION -> {
+                    if (payload != null) {
+                        val notifJson = payload.optJSONObject("notification")
+                        val usersJson = payload.optJSONObject("users")
+                        val notif = notifJson?.let { parseNotification(it) }
+                        val users = parseUsersMap(usersJson)
+                        if (notif != null) {
+                            Log.d(TAG, "Notification received: id=${notif.id}, type=${notif.type}")
+                            IncomingMessage.NotificationReceived(notif, users)
+                        } else null
+                    } else null
+                }
+
+                MessageTypes.NOTIFICATIONS -> {
+                    if (payload != null) {
+                        val notifArray = payload.optJSONArray("notifications")
+                        val usersJson = payload.optJSONObject("users")
+                        val hasMore = payload.optBoolean("has_more", false)
+                        val notifications = parseNotificationsList(notifArray)
+                        val users = parseUsersMap(usersJson)
+                        Log.d(TAG, "Notifications data: ${notifications.size}, hasMore=$hasMore")
+                        IncomingMessage.NotificationsData(notifications, users, hasMore)
+                    } else null
+                }
+
                 MessageTypes.PONG -> {
                     lastPongReceivedAt = System.currentTimeMillis()
                     missedPongs = 0
@@ -562,6 +603,33 @@ class ArgosSocialService @Inject constructor(
     fun getEventComments(eventId: String) {
         Log.d(TAG, "getEventComments: eventId=$eventId")
         send(MessageTypes.GET_EVENT_COMMENTS, mapOf("event_id" to eventId))
+    }
+
+    fun getNotifications(limit: Int? = null, before: String? = null) {
+        val payload = mutableMapOf<String, Any?>()
+        if (limit != null) payload["limit"] = limit
+        if (before != null) payload["before"] = before
+        val json = JSONObject().apply {
+            put("type", MessageTypes.GET_NOTIFICATIONS)
+            if (payload.isNotEmpty()) put("payload", JSONObject(payload))
+        }
+        webSocket?.send(json.toString())
+    }
+
+    fun markNotificationRead(notificationId: String? = null, eventId: String? = null, type: String? = null) {
+        val payload = mutableMapOf<String, Any?>()
+        if (notificationId != null) payload["notification_id"] = notificationId
+        if (eventId != null) payload["event_id"] = eventId
+        if (type != null) payload["type"] = type
+        send(MessageTypes.MARK_NOTIFICATION_READ, payload)
+    }
+
+    fun markAllNotificationsRead() {
+        send(MessageTypes.MARK_ALL_READ, emptyMap())
+    }
+
+    fun getEvent(eventId: String) {
+        send(MessageTypes.GET_EVENT, mapOf("event_id" to eventId))
     }
 
     fun deleteComment(commentId: String) {
@@ -894,6 +962,56 @@ class ArgosSocialService @Inject constructor(
             displayName = obj.getString("display_name"),
             avatarColor = obj.getString("avatar_color")
         )
+    }
+
+    private fun parseNotification(obj: JSONObject): SocialNotification? {
+        return try {
+            val actorsArray = obj.optJSONArray("actors")
+            val actors = if (actorsArray != null) {
+                (0 until actorsArray.length()).map { actorsArray.getString(it) }
+            } else emptyList()
+
+            val metadataObj = obj.optJSONObject("metadata")
+            val metadata = metadataObj?.let { jsonObjectToMap(it) }
+
+            SocialNotification(
+                id = obj.getString("id"),
+                type = obj.getString("type"),
+                eventId = obj.optString("event_id", null),
+                actors = actors,
+                newCount = obj.optInt("new_count", 0),
+                metadata = metadata,
+                viewedAt = obj.optString("viewed_at", null),
+                updatedAt = obj.getString("updated_at"),
+                createdAt = obj.getString("created_at"),
+                eventType = obj.optString("event_type", null),
+                eventPreview = obj.optString("event_preview", null)
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse notification", e)
+            null
+        }
+    }
+
+    private fun parseNotificationsList(array: org.json.JSONArray?): List<SocialNotification> {
+        if (array == null) return emptyList()
+        return (0 until array.length()).mapNotNull { i ->
+            parseNotification(array.getJSONObject(i))
+        }
+    }
+
+    private fun parseUsersMap(obj: JSONObject?): Map<String, SocialUser> {
+        if (obj == null) return emptyMap()
+        val map = mutableMapOf<String, SocialUser>()
+        obj.keys().forEach { key ->
+            try {
+                val userObj = obj.getJSONObject(key)
+                map[key] = parseUser(userObj)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to parse user in users map: $key", e)
+            }
+        }
+        return map
     }
 
     private fun jsonObjectToMap(obj: JSONObject): Map<String, Any?> {

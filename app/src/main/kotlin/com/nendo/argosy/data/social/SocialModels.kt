@@ -192,6 +192,15 @@ object MessageTypes {
     const val FRIENDS_DATA = "friends"
     const val SHARED_COLLECTIONS = "shared_collections"
     const val SAVED_COLLECTIONS = "saved_collections"
+
+    // Notifications
+    const val UNREAD_COUNT = "unread_count"
+    const val NOTIFICATION = "notification"
+    const val GET_NOTIFICATIONS = "get_notifications"
+    const val NOTIFICATIONS = "notifications"
+    const val MARK_NOTIFICATION_READ = "mark_notification_read"
+    const val MARK_ALL_READ = "mark_all_read"
+    const val GET_EVENT = "get_event"
 }
 
 @JsonClass(generateAdapter = true)
@@ -316,3 +325,21 @@ data class FeedCommentPayload(
     @Json(name = "event_id") val eventId: String,
     val comment: FeedComment
 )
+
+data class SocialNotification(
+    val id: String,
+    val type: String,
+    @Json(name = "event_id") val eventId: String?,
+    val actors: List<String>,
+    @Json(name = "new_count") val newCount: Int,
+    val metadata: Map<String, Any?>?,
+    @Json(name = "viewed_at") val viewedAt: String?,
+    @Json(name = "updated_at") val updatedAt: String,
+    @Json(name = "created_at") val createdAt: String,
+    @Json(name = "event_type") val eventType: String?,
+    @Json(name = "event_preview") val eventPreview: String?,
+    val resolvedActors: List<SocialUser> = emptyList()
+) {
+    val isUnread: Boolean
+        get() = viewedAt == null || updatedAt > (viewedAt ?: "")
+}

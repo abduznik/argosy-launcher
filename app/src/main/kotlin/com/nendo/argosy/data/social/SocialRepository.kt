@@ -85,6 +85,22 @@ class SocialRepository @Inject constructor(
     private val _eventComments = MutableStateFlow<Map<String, List<FeedComment>>>(emptyMap())
     val eventComments: StateFlow<Map<String, List<FeedComment>>> = _eventComments.asStateFlow()
 
+    private val _unreadCount = MutableStateFlow(0)
+    val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
+
+    private val _notifications = MutableStateFlow<List<SocialNotification>>(emptyList())
+    val notifications: StateFlow<List<SocialNotification>> = _notifications.asStateFlow()
+
+    private val _notificationsHasMore = MutableStateFlow(false)
+    val notificationsHasMore: StateFlow<Boolean> = _notificationsHasMore.asStateFlow()
+
+    private val _isLoadingNotifications = MutableStateFlow(false)
+    val isLoadingNotifications: StateFlow<Boolean> = _isLoadingNotifications.asStateFlow()
+
+    private var _isLoadingMoreNotifications = false
+
+    private val _usersCache = mutableMapOf<String, SocialUser>()
+
     val authState: StateFlow<SocialAuthManager.AuthState> = authManager.authState
     val serviceConnectionState: StateFlow<ArgosSocialService.ConnectionState> = socialService.connectionState
 
@@ -314,6 +330,26 @@ class SocialRepository @Inject constructor(
                         _discordLinked.value = false
                         _discordUsername.value = null
                     }
+                    is ArgosSocialService.IncomingMessage.UnreadCount -> {
+                        _unreadCount.value = message.count
+                    }
+                    is ArgosSocialService.IncomingMessage.NotificationReceived -> {
+                        _usersCache.putAll(message.users)
+                        val resolved = resolveNotificationActors(message.notification)
+                        _notifications.value = listOf(resolved) + _notifications.value
+                    }
+                    is ArgosSocialService.IncomingMessage.NotificationsData -> {
+                        _usersCache.putAll(message.users)
+                        _isLoadingNotifications.value = false
+                        val resolved = message.notifications.map { resolveNotificationActors(it) }
+                        if (_isLoadingMoreNotifications) {
+                            _notifications.value = _notifications.value + resolved
+                            _isLoadingMoreNotifications = false
+                        } else {
+                            _notifications.value = resolved
+                        }
+                        _notificationsHasMore.value = message.hasMore
+                    }
                     is ArgosSocialService.IncomingMessage.Error -> {
                         if (message.code == "unknown_type") {
                             Log.w(TAG, "Server returned unknown_type -- suppressing achievement sync for this session")
@@ -388,6 +424,11 @@ class SocialRepository @Inject constructor(
         _feedEvents.value = emptyList()
         _eventComments.value = emptyMap()
         _feedHasMore.value = false
+        _notifications.value = emptyList()
+        _unreadCount.value = 0
+        _notificationsHasMore.value = false
+        _isLoadingNotifications.value = false
+        _usersCache.clear()
     }
 
     fun sendPresence(status: PresenceStatus, gameIgdbId: Int? = null, gameTitle: String? = null): Boolean {
@@ -608,6 +649,55 @@ class SocialRepository @Inject constructor(
         if (socialService.isConnected()) {
             socialService.reportEvent(eventId, reason)
         }
+    }
+
+    fun requestNotifications(limit: Int = NOTIFICATIONS_PAGE_SIZE) {
+        if (socialService.isConnected()) {
+            _isLoadingNotifications.value = true
+            socialService.getNotifications(limit)
+        }
+    }
+
+    fun loadMoreNotifications() {
+        val last = _notifications.value.lastOrNull() ?: return
+        if (_notificationsHasMore.value && !_isLoadingNotifications.value) {
+            _isLoadingNotifications.value = true
+            _isLoadingMoreNotifications = true
+            socialService.getNotifications(NOTIFICATIONS_PAGE_SIZE, last.updatedAt)
+        }
+    }
+
+    fun markNotificationRead(notificationId: String) {
+        if (socialService.isConnected()) {
+            socialService.markNotificationRead(notificationId = notificationId)
+            _notifications.value = _notifications.value.map {
+                if (it.id == notificationId && it.isUnread) {
+                    it.copy(viewedAt = java.time.Instant.now().toString())
+                } else it
+            }
+        }
+    }
+
+    fun markAllNotificationsRead() {
+        if (socialService.isConnected()) {
+            socialService.markAllNotificationsRead()
+            val now = java.time.Instant.now().toString()
+            _notifications.value = _notifications.value.map {
+                it.copy(viewedAt = now)
+            }
+            _unreadCount.value = 0
+        }
+    }
+
+    fun getEvent(eventId: String) {
+        if (socialService.isConnected()) {
+            socialService.getEvent(eventId)
+        }
+    }
+
+    private fun resolveNotificationActors(notification: SocialNotification): SocialNotification {
+        val resolved = notification.actors.mapNotNull { _usersCache[it] }
+        return notification.copy(resolvedActors = resolved)
     }
 
     fun requestEventComments(eventId: String) {
@@ -906,5 +996,6 @@ class SocialRepository @Inject constructor(
         private const val THUMB_QUALITY = 80
         private const val TAG = "SocialRepository"
         private const val FEED_PAGE_SIZE = 10
+        private const val NOTIFICATIONS_PAGE_SIZE = 20
     }
 }
