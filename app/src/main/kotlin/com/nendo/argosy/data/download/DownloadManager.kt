@@ -656,63 +656,26 @@ class DownloadManager @Inject constructor(
 
                 // Check if download is already complete (e.g., app crashed during extraction)
                 if (targetFile.exists() && targetFile.length() >= progress.totalBytes && progress.totalBytes > 0) {
-                    // Game file downloads (DLC/updates) don't need extraction or organization
-                    val finalPath = if (progress.isGameFileDownload) {
-                        targetFile.absolutePath
-                    } else {
-                        processDownloadedFile(
-                            targetFile = targetFile,
-                            platformDir = platformDir,
-                            platformSlug = progress.platformSlug,
-                            gameTitle = progress.gameTitle,
-                            progressId = progress.id,
-                            isDiscDownload = progress.isDiscDownload,
-                            expectedSize = progress.totalBytes,
-                            isMultiFileRom = progress.isMultiFileRom,
-                            onExtractionProgress = { bytesWritten, totalBytes ->
-                                updateProgress(
-                                    progress.copy(
-                                        state = DownloadState.EXTRACTING,
-                                        extractionBytesWritten = bytesWritten,
-                                        extractionTotalBytes = totalBytes
-                                    )
-                                )
-                            }
-                        )
-                    }
-
-                    Log.d(TAG, "processDownloadedFile returned: $finalPath")
-                    Log.d(TAG, "  targetFile was: ${targetFile.absolutePath}")
-                    Log.d(TAG, "  gameTitle: ${progress.gameTitle}")
-
-                    when {
-                        progress.isGameFileDownload && progress.gameFileId != null -> {
-                            Log.d(TAG, "Storing localPath to DB (gameFile): gameFileId=${progress.gameFileId}, path=$finalPath")
-                            gameFileDao.updateLocalPath(
-                                progress.gameFileId,
-                                finalPath,
-                                Instant.now()
-                            )
-                            autoApplyToEdenIfNeeded(progress, finalPath)
-                        }
-                        progress.isDiscDownload && progress.discId != null -> {
-                            Log.d(TAG, "Storing localPath to DB (disc): discId=${progress.discId}, path=$finalPath")
-                            gameDiscDao.updateLocalPath(progress.discId, finalPath)
-                            m3uManager.generateM3uIfComplete(progress.gameId)
-                        }
-                        else -> {
-                            Log.d(TAG, "Storing localPath to DB (game): gameId=${progress.gameId}, path=$finalPath")
-                            gameDao.updateLocalPath(
-                                progress.gameId,
-                                finalPath,
-                                GameSource.ROMM_SYNCED
-                            )
-                        }
-                    }
-                    return@withContext DownloadResult.Success(progress.totalBytes)
+                    Log.d(TAG, "Target file already complete (${targetFile.length()} bytes), finalizing")
+                    return@withContext finalizeCompletedFile(targetFile, platformDir, progress)
                 }
 
                 val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
+
+                // Temp file already has all the bytes (e.g., app was killed after download
+                // finished but before the rename). Promote it directly instead of requesting
+                // a Range that the server will reject with 416.
+                if (existingBytes > 0 && progress.totalBytes > 0) {
+                    if (existingBytes == progress.totalBytes) {
+                        Log.d(TAG, "Temp file matches expected size ($existingBytes bytes), promoting to target")
+                        promoteTempFile(tempFile, targetFile)
+                        return@withContext finalizeCompletedFile(targetFile, platformDir, progress)
+                    } else if (existingBytes > progress.totalBytes) {
+                        Log.w(TAG, "Temp file oversized ($existingBytes > ${progress.totalBytes}), deleting")
+                        tempFile.delete()
+                    }
+                }
+
                 val rangeHeader = if (existingBytes > 0) "bytes=$existingBytes-" else null
 
                 when (val result = romMRepository.downloadRom(progress.rommId, progress.fileName, rangeHeader)) {
@@ -811,79 +774,25 @@ class DownloadManager @Inject constructor(
                                 )
                                 downloadQueueDao.updateProgress(progress.id, bytesRead)
 
-                                if (!tempFile.renameTo(targetFile)) {
-                                    tempFile.copyTo(targetFile, overwrite = true)
-                                    tempFile.delete()
-                                }
-
-                                // Game file downloads (DLC/updates) don't need extraction or organization
-                                val finalPath = if (progress.isGameFileDownload) {
-                                    targetFile.absolutePath
-                                } else {
-                                    processDownloadedFile(
-                                        targetFile = targetFile,
-                                        platformDir = platformDir,
-                                        platformSlug = progress.platformSlug,
-                                        gameTitle = progress.gameTitle,
-                                        progressId = progress.id,
-                                        isDiscDownload = progress.isDiscDownload,
-                                        expectedSize = totalSize,
-                                        isMultiFileRom = progress.isMultiFileRom,
-                                        onExtractionProgress = { bytesWritten, totalBytes ->
-                                            updateProgress(
-                                                progress.copy(
-                                                    state = DownloadState.EXTRACTING,
-                                                    extractionBytesWritten = bytesWritten,
-                                                    extractionTotalBytes = totalBytes
-                                                )
-                                            )
-                                        }
-                                    )
-                                }
-
-                                Log.d(TAG, "processDownloadedFile returned: $finalPath")
-                                Log.d(TAG, "  targetFile was: ${targetFile.absolutePath}")
-                                Log.d(TAG, "  gameTitle: ${progress.gameTitle}")
-
-                                when {
-                                    progress.isGameFileDownload && progress.gameFileId != null -> {
-                                        Log.d(TAG, "Storing localPath to DB (gameFile): gameFileId=${progress.gameFileId}, path=$finalPath")
-                                        gameFileDao.updateLocalPath(
-                                            progress.gameFileId,
-                                            finalPath,
-                                            Instant.now()
-                                        )
-                                        autoApplyToEdenIfNeeded(progress, finalPath)
-                                    }
-                                    progress.isDiscDownload && progress.discId != null -> {
-                                        Log.d(TAG, "Storing localPath to DB (disc): discId=${progress.discId}, path=$finalPath")
-                                        gameDiscDao.updateLocalPath(progress.discId, finalPath)
-                                        m3uManager.generateM3uIfComplete(progress.gameId)
-                                    }
-                                    else -> {
-                                        Log.d(TAG, "Storing localPath to DB (game): gameId=${progress.gameId}, path=$finalPath")
-                                        gameDao.updateLocalPath(
-                                            progress.gameId,
-                                            finalPath,
-                                            GameSource.ROMM_SYNCED
-                                        )
-                                    }
-                                }
-
-                                _completionEvents.emit(
-                                    DownloadCompletionEvent(
-                                        gameId = progress.gameId,
-                                        rommId = progress.rommId,
-                                        localPath = finalPath,
-                                        isDiscDownload = progress.isDiscDownload
-                                    )
-                                )
-
-                                DownloadResult.Success(bytesRead)
+                                promoteTempFile(tempFile, targetFile)
+                                finalizeCompletedFile(targetFile, platformDir, progress.copy(totalBytes = totalSize))
                             }
                         }
                     }
                     is RomMResult.Error -> {
+                        if (result.code == 416 && tempFile.exists()) {
+                            val tempSize = tempFile.length()
+                            if (progress.totalBytes > 0 && tempSize == progress.totalBytes) {
+                                Log.w(TAG, "416: temp file ($tempSize bytes) matches expected, promoting as complete")
+                                promoteTempFile(tempFile, targetFile)
+                                return@withContext finalizeCompletedFile(targetFile, platformDir, progress)
+                            } else {
+                                Log.w(TAG, "416: temp file ($tempSize bytes) vs expected (${progress.totalBytes}), deleting and retrying")
+                                tempFile.delete()
+                                downloadQueueDao.updateProgress(progress.id, 0)
+                                return@withContext downloadRom(progress.copy(bytesDownloaded = 0))
+                            }
+                        }
                         DownloadResult.Failure(result.message)
                     }
                 }
@@ -893,6 +802,70 @@ class DownloadManager @Inject constructor(
                 DownloadResult.Failure(e.message ?: "Unknown error")
             }
         }
+
+    private suspend fun finalizeCompletedFile(
+        targetFile: File,
+        platformDir: File,
+        progress: DownloadProgress
+    ): DownloadResult {
+        val finalPath = if (progress.isGameFileDownload) {
+            targetFile.absolutePath
+        } else {
+            processDownloadedFile(
+                targetFile = targetFile,
+                platformDir = platformDir,
+                platformSlug = progress.platformSlug,
+                gameTitle = progress.gameTitle,
+                progressId = progress.id,
+                isDiscDownload = progress.isDiscDownload,
+                expectedSize = progress.totalBytes,
+                isMultiFileRom = progress.isMultiFileRom,
+                onExtractionProgress = { bytesWritten, totalBytes ->
+                    updateProgress(
+                        progress.copy(
+                            state = DownloadState.EXTRACTING,
+                            extractionBytesWritten = bytesWritten,
+                            extractionTotalBytes = totalBytes
+                        )
+                    )
+                }
+            )
+        }
+
+        Log.d(TAG, "finalizeCompletedFile: path=$finalPath, gameTitle=${progress.gameTitle}")
+
+        when {
+            progress.isGameFileDownload && progress.gameFileId != null -> {
+                gameFileDao.updateLocalPath(progress.gameFileId, finalPath, Instant.now())
+                autoApplyToEdenIfNeeded(progress, finalPath)
+            }
+            progress.isDiscDownload && progress.discId != null -> {
+                gameDiscDao.updateLocalPath(progress.discId, finalPath)
+                m3uManager.generateM3uIfComplete(progress.gameId)
+            }
+            else -> {
+                gameDao.updateLocalPath(progress.gameId, finalPath, GameSource.ROMM_SYNCED)
+            }
+        }
+
+        _completionEvents.emit(
+            DownloadCompletionEvent(
+                gameId = progress.gameId,
+                rommId = progress.rommId,
+                localPath = finalPath,
+                isDiscDownload = progress.isDiscDownload
+            )
+        )
+
+        return DownloadResult.Success(progress.totalBytes)
+    }
+
+    private fun promoteTempFile(tempFile: File, targetFile: File) {
+        if (!tempFile.renameTo(targetFile)) {
+            tempFile.copyTo(targetFile, overwrite = true)
+            tempFile.delete()
+        }
+    }
 
     private fun createOutputStream(tempFile: File, isResume: Boolean): java.io.OutputStream {
         return if (isResume && tempFile.exists()) {
