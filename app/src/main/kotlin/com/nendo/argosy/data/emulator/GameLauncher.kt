@@ -31,6 +31,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "GameLauncher"
+private const val EXTRA_ALREADY_LAUNCHED = "argosy.already_launched"
 
 data class DiscOption(
     val fileName: String,
@@ -39,7 +40,7 @@ data class DiscOption(
 )
 
 sealed class LaunchResult {
-    data class Success(val intent: Intent, val discId: Long? = null) : LaunchResult()
+    data class Success(val intent: Intent, val discId: Long? = null, val alreadyLaunched: Boolean = false) : LaunchResult()
     data class SelectDisc(val gameId: Long, val discs: List<DiscOption>) : LaunchResult()
     data class NoEmulator(val platformSlug: String) : LaunchResult()
     data class NoRomFile(val gamePath: String?) : LaunchResult()
@@ -179,7 +180,8 @@ class GameLauncher @Inject constructor(
                 append(" | config=${emulator.launchConfig::class.simpleName}")
             }
         })
-        return LaunchResult.Success(intent)
+        val alreadyLaunched = intent.getBooleanExtra(EXTRA_ALREADY_LAUNCHED, false)
+        return LaunchResult.Success(intent, alreadyLaunched = alreadyLaunched)
     }
 
     private suspend fun launchMultiDiscGame(game: GameEntity, requestedDiscId: Long?, forResume: Boolean): LaunchResult {
@@ -272,7 +274,8 @@ class GameLauncher @Inject constructor(
             append(" | size=${launchFile.length()}b")
             append(" | ext=${launchFile.extension}")
         })
-        return LaunchResult.Success(intent)
+        val alreadyLaunched = intent.getBooleanExtra(EXTRA_ALREADY_LAUNCHED, false)
+        return LaunchResult.Success(intent, alreadyLaunched = alreadyLaunched)
     }
 
     private suspend fun launchSteamGame(game: GameEntity): LaunchResult {
@@ -576,7 +579,16 @@ class GameLauncher @Inject constructor(
         config: LaunchConfig.Custom,
         forResume: Boolean
     ): Intent? {
-        val needsUriPermission = config.intentExtras.values.any { it is ExtraValue.FileUri }
+        if (config.useFileUri && emulator.launchAction == Intent.ACTION_VIEW) {
+            return launchViaShell(emulator, romFile, config, useContentUri = false)
+        }
+
+        if (config.useShellLaunch && emulator.launchAction == Intent.ACTION_VIEW) {
+            return launchViaShell(emulator, romFile, config, useContentUri = true)
+        }
+
+        val needsUriPermission = emulator.launchAction == Intent.ACTION_VIEW ||
+            config.intentExtras.values.any { it is ExtraValue.FileUri }
 
         if (needsUriPermission) {
             val uri = getFileUri(romFile)
@@ -597,16 +609,11 @@ class GameLauncher @Inject constructor(
             addCategory(Intent.CATEGORY_DEFAULT)
 
             if (emulator.launchAction == Intent.ACTION_VIEW) {
-                if (config.useFileUri) {
-                    val uri = Uri.parse(romFile.absolutePath)
-                    setDataAndType(uri, config.mimeTypeOverride ?: getMimeType(romFile))
-                } else {
-                    val uri = getFileUri(romFile)
-                    val mimeType = config.mimeTypeOverride ?: getMimeType(romFile)
-                    setDataAndType(uri, mimeType)
-                    clipData = ClipData.newRawUri(null, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
+                val uri = getFileUri(romFile)
+                val mimeType = config.mimeTypeOverride ?: getMimeType(romFile)
+                setDataAndType(uri, mimeType)
+                clipData = ClipData.newRawUri(null, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
 
             if (config.useAbsolutePath) {
@@ -659,6 +666,50 @@ class GameLauncher @Inject constructor(
         }
     }
 
+
+    private fun launchViaShell(
+        emulator: EmulatorDef,
+        romFile: File,
+        config: LaunchConfig.Custom,
+        useContentUri: Boolean
+    ): Intent {
+        val component = if (config.activityClass != null) {
+            "${emulator.packageName}/${config.activityClass}"
+        } else {
+            emulator.packageName
+        }
+
+        val data = if (useContentUri) {
+            val uri = getFileUri(romFile)
+            try {
+                context.grantUriPermission(emulator.packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (e: Exception) {
+                Logger.warn(TAG, "Failed to grant URI permission to ${emulator.packageName}", e)
+            }
+            uri.toString()
+        } else {
+            romFile.absolutePath
+        }
+
+        val command = arrayOf(
+            "am", "start",
+            "-n", component,
+            "-d", data,
+            "--activity-clear-task",
+            "--activity-clear-top"
+        )
+
+        Logger.debug(TAG, "Shell launch: am start -n $component -d ${LogSanitizer.sanitizePath(data)} --activity-clear-task --activity-clear-top")
+        Runtime.getRuntime().exec(command)
+
+        return Intent(Intent.ACTION_VIEW).apply {
+            this.component = ComponentName(
+                emulator.packageName,
+                config.activityClass ?: emulator.packageName
+            )
+            putExtra(EXTRA_ALREADY_LAUNCHED, true)
+        }
+    }
 
     private fun buildCustomSchemeIntent(
         emulator: EmulatorDef,

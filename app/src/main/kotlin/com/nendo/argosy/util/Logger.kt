@@ -56,11 +56,14 @@ object LogSanitizer {
             intent.`package`?.let { append(", pkg=$it") }
             intent.component?.let { append(", component=${it.shortClassName}") }
             intent.data?.let { uri ->
+                val scheme = uri.scheme
                 val path = uri.path
-                if (path != null) {
-                    append(", data=${uri.scheme}://.../${File(path).name}")
-                } else {
-                    append(", data=${uri.scheme}://...")
+                if (scheme != null && path != null) {
+                    append(", data=$scheme://.../${File(path).name}")
+                } else if (scheme != null) {
+                    append(", data=$scheme://...")
+                } else if (path != null) {
+                    append(", data=path:${File(path).name}")
                 }
             }
             val extras = intent.extras

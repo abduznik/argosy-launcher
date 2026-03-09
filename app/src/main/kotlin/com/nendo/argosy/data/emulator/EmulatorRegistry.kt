@@ -42,7 +42,8 @@ sealed class LaunchConfig {
         val intentExtras: Map<String, ExtraValue> = emptyMap(),
         val mimeTypeOverride: String? = null,
         val useAbsolutePath: Boolean = false,
-        val useFileUri: Boolean = false
+        val useFileUri: Boolean = false,
+        val useShellLaunch: Boolean = false
     ) : LaunchConfig()
 
     data class CustomScheme(
@@ -312,7 +313,8 @@ object EmulatorRegistry {
             displayName = "DraStic",
             supportedPlatforms = setOf("nds"),
             launchConfig = LaunchConfig.Custom(
-                activityClass = "com.dsemu.drastic.DraSticActivity"
+                activityClass = "com.dsemu.drastic.DraSticActivity",
+                useShellLaunch = true
             ),
             downloadUrl = "https://play.google.com/store/apps/details?id=com.dsemu.drastic"
         ),

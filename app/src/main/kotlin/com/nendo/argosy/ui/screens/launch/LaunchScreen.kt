@@ -60,10 +60,12 @@ fun LaunchScreen(
     LaunchedEffect(launchIntent) {
         launchIntent?.let { intent ->
             try {
-                if (launchOptions != null) {
-                    context.startActivity(intent, launchOptions)
-                } else {
-                    context.startActivity(intent)
+                if (!intent.getBooleanExtra("argosy.already_launched", false)) {
+                    if (launchOptions != null) {
+                        context.startActivity(intent, launchOptions)
+                    } else {
+                        context.startActivity(intent)
+                    }
                 }
                 viewModel.clearLaunchIntent()
             } catch (e: Exception) {
