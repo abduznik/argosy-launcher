@@ -18,7 +18,7 @@ class DisplayAffinityHelper @Inject constructor(
     private val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
 
     private val physicalDisplays: Array<Display>
-        get() = displayManager.displays.filter { !it.isVirtualDisplay() }.toTypedArray()
+        get() = displayManager.displays.filter { it.isPhysicalDisplay() }.toTypedArray()
 
     val hasSecondaryDisplay: Boolean
         get() = physicalDisplays.size > 1
@@ -78,23 +78,22 @@ class DisplayAffinityHelper @Inject constructor(
 
     fun isPhysicalDisplay(displayId: Int): Boolean {
         val display = displayManager.getDisplay(displayId) ?: return false
-        return !display.isVirtualDisplay()
+        return display.isPhysicalDisplay()
     }
 
     companion object {
         private const val DISPLAY_TYPE_BUILT_IN = 1
         private const val DISPLAY_TYPE_EXTERNAL = 2
-        private const val DISPLAY_TYPE_VIRTUAL = 5
 
         private fun Display.displayType(): Int? = try {
             Display::class.java.getMethod("getType").invoke(this) as? Int
         } catch (_: Exception) { null }
 
-        private fun Display.isVirtualDisplay(): Boolean {
+        private fun Display.isPhysicalDisplay(): Boolean {
+            if (state == Display.STATE_OFF) return false
             val type = displayType()
-            if (type == DISPLAY_TYPE_VIRTUAL) return true
-            if (type != null) return false
-            return flags and Display.FLAG_PRIVATE != 0
+            if (type != null) return type == DISPLAY_TYPE_BUILT_IN || type == DISPLAY_TYPE_EXTERNAL
+            return flags and Display.FLAG_PRIVATE == 0
         }
     }
 }
