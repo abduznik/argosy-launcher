@@ -119,6 +119,17 @@ object SavePathRegistry {
             usesFolderBasedSaves = true,
             supported = true
         ),
+        // Dolphin Handheld - Wii NAND saves
+        "dolphin_handheld_wii" to SavePathConfig(
+            emulatorId = "dolphin_handheld_wii",
+            defaultPaths = listOf(
+                "{extStorage}/Android/data/org.dolphinemu.handheld/files/Wii/title/00010000",
+                "{extStorage}/dolphin-emu/Wii/title/00010000"
+            ),
+            saveExtensions = listOf("*"),
+            usesFolderBasedSaves = true,
+            supported = true
+        ),
 
         // 3DS - folder-based saves
         "citra" to SavePathConfig(
