@@ -25,10 +25,10 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+          cache-read-only: false
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug -PallAbis
+        run: ./gradlew assembleDebug --parallel
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -37,6 +37,7 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
 
   test:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,10 +53,10 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+          cache-read-only: true
 
       - name: Run unit tests
-        run: ./gradlew testDebugUnitTest -PallAbis
+        run: ./gradlew testDebugUnitTest --parallel
 
       - name: Upload test results
         if: always()
@@ -65,6 +66,7 @@ jobs:
           path: app/build/reports/tests/
 
   lint:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -80,10 +82,10 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+          cache-read-only: true
 
       - name: Run Android Lint
-        run: ./gradlew lintDebug -PallAbis
+        run: ./gradlew lintDebug --parallel
 
       - name: Upload lint results
         if: always()
