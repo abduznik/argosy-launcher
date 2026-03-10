@@ -3,6 +3,7 @@ package com.nendo.argosy.util
 import android.app.ActivityOptions
 import android.content.Context
 import android.hardware.display.DisplayManager
+import android.os.Build
 import android.os.Bundle
 import android.view.Display
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -20,8 +21,13 @@ class DisplayAffinityHelper @Inject constructor(
     private val physicalDisplays: Array<Display>
         get() = displayManager.displays.filter { it.isPhysicalDisplay() }.toTypedArray()
 
-    val hasSecondaryDisplay: Boolean
+    val hasPhysicalSecondaryDisplay: Boolean
         get() = physicalDisplays.size > 1
+
+    var dualScreenEnabled: Boolean = false
+
+    val hasSecondaryDisplay: Boolean
+        get() = dualScreenEnabled && hasPhysicalSecondaryDisplay
 
     val secondaryDisplayType: SecondaryDisplayType
         get() {
@@ -84,6 +90,11 @@ class DisplayAffinityHelper @Inject constructor(
     companion object {
         private const val DISPLAY_TYPE_BUILT_IN = 1
         private const val DISPLAY_TYPE_EXTERNAL = 2
+
+        private val KNOWN_DUAL_SCREEN_DEVICES = listOf("thor")
+
+        fun isKnownDualScreenDevice(): Boolean =
+            KNOWN_DUAL_SCREEN_DEVICES.any { Build.MODEL.contains(it, ignoreCase = true) }
 
         private fun Display.displayType(): Int? = try {
             Display::class.java.getMethod("getType").invoke(this) as? Int

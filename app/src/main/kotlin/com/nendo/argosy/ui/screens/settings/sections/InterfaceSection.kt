@@ -47,7 +47,9 @@ internal data class InterfaceLayoutState(
     val bgmEnabled: Boolean,
     val bgmIsFolder: Boolean,
     val uiSoundsEnabled: Boolean,
-    val hasSecondaryDisplay: Boolean = false
+    val hasSecondaryDisplay: Boolean = false,
+    val hasPhysicalSecondaryDisplay: Boolean = false,
+    val dualScreenEnabled: Boolean = false
 )
 
 internal sealed class InterfaceItem(
@@ -78,10 +80,11 @@ internal sealed class InterfaceItem(
     data object UiScale : InterfaceItem("uiScale", "appearance")
     data object BoxArt : InterfaceItem("boxArt", "appearance")
     data object HomeScreen : InterfaceItem("homeScreen", "appearance")
+    data object DualScreenEnabled : InterfaceItem("dualScreenEnabled", "appearance")
     data object DisplayRoles : InterfaceItem(
         key = "displayRoles",
         section = "appearance",
-        visibleWhen = { it.hasSecondaryDisplay }
+        visibleWhen = { it.dualScreenEnabled }
     )
     // Screen Safety
     data object ScreenDimmer : InterfaceItem("screenDimmer", "screenSafety")
@@ -159,7 +162,7 @@ internal sealed class InterfaceItem(
 
         val ALL: List<InterfaceItem> = listOf(
             AppearanceHeader,
-            Theme, AccentColor, SecondaryColor, GridDensity, UiScale, BoxArt, HomeScreen, DisplayRoles,
+            Theme, AccentColor, SecondaryColor, GridDensity, UiScale, BoxArt, HomeScreen, DualScreenEnabled, DisplayRoles,
             ScreenSafetyHeader,
             ScreenDimmer, DimAfter, DimLevel,
             AmbientLedHeader,
@@ -203,34 +206,22 @@ fun InterfaceSection(uiState: SettingsUiState, viewModel: SettingsViewModel) {
         display.ambientLedAvailable,
         display.ambientLedEnabled,
         display.hasSecondaryDisplay,
+        display.hasPhysicalSecondaryDisplay,
+        display.dualScreenEnabled,
         bgmEnabled,
         bgmIsFolder,
         uiSoundsEnabled
     ) {
-        InterfaceLayoutState(display, bgmEnabled, bgmIsFolder, uiSoundsEnabled, display.hasSecondaryDisplay)
+        InterfaceLayoutState(display, bgmEnabled, bgmIsFolder, uiSoundsEnabled, display.hasSecondaryDisplay, display.hasPhysicalSecondaryDisplay, display.dualScreenEnabled)
     }
 
     val currentHue = display.primaryColor?.let { colorIntToHue(it) }
     val secondaryHue = display.secondaryColor?.let { colorIntToHue(it) }
 
-    val visibleItems = remember(
-        display.ambientLedAvailable,
-        display.ambientLedEnabled,
-        display.hasSecondaryDisplay,
-        bgmEnabled,
-        bgmIsFolder,
-        uiSoundsEnabled
-    ) {
+    val visibleItems = remember(layoutState) {
         interfaceLayout.visibleItems(layoutState)
     }
-    val sections = remember(
-        display.ambientLedAvailable,
-        display.ambientLedEnabled,
-        display.hasSecondaryDisplay,
-        bgmEnabled,
-        bgmIsFolder,
-        uiSoundsEnabled
-    ) {
+    val sections = remember(layoutState) {
         interfaceLayout.buildSections(layoutState)
     }
 
@@ -333,6 +324,14 @@ fun InterfaceSection(uiState: SettingsUiState, viewModel: SettingsViewModel) {
                     subtitle = "Background and footer settings",
                     isFocused = isFocused(item),
                     onClick = { viewModel.navigateToHomeScreen() }
+                )
+
+                InterfaceItem.DualScreenEnabled -> SwitchPreference(
+                    title = "Enable Dual-screen Mode",
+                    subtitle = "Use secondary display as companion screen",
+                    isEnabled = display.dualScreenEnabled,
+                    isFocused = isFocused(item),
+                    onToggle = { viewModel.setDualScreenEnabled(it) }
                 )
 
                 InterfaceItem.DisplayRoles -> CyclePreference(

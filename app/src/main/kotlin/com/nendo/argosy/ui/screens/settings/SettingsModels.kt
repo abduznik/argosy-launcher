@@ -187,6 +187,8 @@ data class DisplayState(
     val ambientLedAvailable: Boolean = false,
     val hasScreenCapturePermission: Boolean = true,
     val hasSecondaryDisplay: Boolean = false,
+    val hasPhysicalSecondaryDisplay: Boolean = false,
+    val dualScreenEnabled: Boolean = false,
     val displayRoleOverride: DisplayRoleOverride = DisplayRoleOverride.AUTO,
     val installedOnlyHome: Boolean = false
 )

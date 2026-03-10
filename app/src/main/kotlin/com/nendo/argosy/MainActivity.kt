@@ -215,6 +215,7 @@ class MainActivity : ComponentActivity() {
 
         discordPresenceManager.init(this)
 
+        displayAffinityHelper.dualScreenEnabled = sessionStateStore.isDualScreenEnabled()
         val resolver = DisplayRoleResolver(displayAffinityHelper, sessionStateStore)
         isRolesSwapped = resolver.isSwapped
         isDualScreenDevice = displayAffinityHelper.hasSecondaryDisplay
@@ -288,6 +289,8 @@ class MainActivity : ComponentActivity() {
             ambientAudioManager = ambientAudioManager,
             sessionStateStore = sessionStateStore,
             dualScreenManager = dualScreenManager,
+            displayAffinityHelper = displayAffinityHelper,
+            onDualScreenChanged = { isDualScreenDevice = it },
             hasWindowFocus = ::hasWindowFocus
         )
         preferencesObserver.collectIn(activityScope)
@@ -523,6 +526,9 @@ class MainActivity : ComponentActivity() {
     private fun initCacheAndPreferences() {
         activityScope.launch {
             val prefs = preferencesRepository.preferences.first()
+            displayAffinityHelper.dualScreenEnabled = prefs.dualScreenEnabled
+            sessionStateStore.setDualScreenEnabled(prefs.dualScreenEnabled)
+            isDualScreenDevice = displayAffinityHelper.hasSecondaryDisplay
             imageCacheManager.setCustomCachePath(prefs.imageCachePath)
 
             val validationResult = imageCacheManager.validateAndCleanCache()

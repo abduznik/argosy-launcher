@@ -214,8 +214,9 @@ private fun routeStorageConfirm(vm: SettingsViewModel, state: SettingsUiState): 
 }
 
 private fun routeInterfaceConfirm(vm: SettingsViewModel, state: SettingsUiState): InputResult {
-    val layoutState = InterfaceLayoutState(state.display, state.ambientAudio.enabled, state.ambientAudio.isFolder, state.sounds.enabled, state.display.hasSecondaryDisplay)
+    val layoutState = InterfaceLayoutState(state.display, state.ambientAudio.enabled, state.ambientAudio.isFolder, state.sounds.enabled, state.display.hasSecondaryDisplay, state.display.hasPhysicalSecondaryDisplay, state.display.dualScreenEnabled)
     when (interfaceItemAtFocusIndex(state.focusedIndex, layoutState)) {
+        InterfaceItem.DualScreenEnabled -> vm.setDualScreenEnabled(!state.display.dualScreenEnabled)
         InterfaceItem.Theme -> {
             val next = when (state.display.themeMode) {
                 ThemeMode.SYSTEM -> ThemeMode.LIGHT

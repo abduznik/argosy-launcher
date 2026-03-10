@@ -13,11 +13,14 @@ class MainActivityPreferencesObserver(
     private val ambientAudioManager: AmbientAudioManager,
     private val sessionStateStore: SessionStateStore,
     private val dualScreenManager: DualScreenManager,
+    private val displayAffinityHelper: com.nendo.argosy.util.DisplayAffinityHelper,
+    private val onDualScreenChanged: (Boolean) -> Unit,
     private val hasWindowFocus: () -> Boolean,
 ) {
 
     private var previousHomeApps: Set<String>? = null
     private var previousPrimaryColor: Int? = null
+    private var previousDualScreenEnabled: Boolean? = null
 
     fun collectIn(scope: CoroutineScope) {
         scope.launch {
@@ -63,6 +66,13 @@ class MainActivityPreferencesObserver(
                     swapXY = prefs.swapXY,
                     swapStartSelect = prefs.swapStartSelect
                 )
+
+                if (prefs.dualScreenEnabled != previousDualScreenEnabled) {
+                    displayAffinityHelper.dualScreenEnabled = prefs.dualScreenEnabled
+                    sessionStateStore.setDualScreenEnabled(prefs.dualScreenEnabled)
+                    onDualScreenChanged(displayAffinityHelper.hasSecondaryDisplay)
+                }
+                previousDualScreenEnabled = prefs.dualScreenEnabled
             }
         }
     }

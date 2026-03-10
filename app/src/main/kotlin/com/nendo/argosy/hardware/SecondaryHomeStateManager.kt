@@ -67,6 +67,7 @@ class SecondaryHomeStateManager(
     ): InitialState {
         sessionStateStore = SessionStateStore(context)
 
+        displayAffinityHelper.dualScreenEnabled = sessionStateStore.isDualScreenEnabled()
         val useDualScreenMode = displayAffinityHelper.hasSecondaryDisplay
         val resolver = DisplayRoleResolver(displayAffinityHelper, sessionStateStore)
         val isShowcaseRole = resolver.isSwapped

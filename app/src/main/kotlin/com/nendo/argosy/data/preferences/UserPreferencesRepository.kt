@@ -136,6 +136,7 @@ class UserPreferencesRepository @Inject constructor(
             androidDataSafUri = sync.androidDataSafUri,
             builtinLibretroEnabled = builtinEnabled,
             appAffinityEnabled = app.appAffinityEnabled,
+            dualScreenEnabled = display.dualScreenEnabled,
             displayRoleOverride = display.displayRoleOverride,
             dualScreenInputFocus = display.dualScreenInputFocus,
             installedOnlyHome = display.installedOnlyHome,
@@ -196,6 +197,7 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun setScreenDimmerEnabled(enabled: Boolean) = displayPrefs.setScreenDimmerEnabled(enabled)
     suspend fun setScreenDimmerTimeoutMinutes(minutes: Int) = displayPrefs.setScreenDimmerTimeoutMinutes(minutes)
     suspend fun setScreenDimmerLevel(level: Int) = displayPrefs.setScreenDimmerLevel(level)
+    suspend fun setDualScreenEnabled(enabled: Boolean) = displayPrefs.setDualScreenEnabled(enabled)
     suspend fun setDisplayRoleOverride(override: DisplayRoleOverride) = displayPrefs.setDisplayRoleOverride(override)
     suspend fun setDualScreenInputFocus(focus: DualScreenInputFocus) = displayPrefs.setDualScreenInputFocus(focus)
     suspend fun setInstalledOnlyHome(enabled: Boolean) = displayPrefs.setInstalledOnlyHome(enabled)
@@ -522,6 +524,7 @@ data class UserPreferences(
     val androidDataSafUri: String? = null,
     val builtinLibretroEnabled: Boolean = true,
     val appAffinityEnabled: Boolean = false,
+    val dualScreenEnabled: Boolean = false,
     val displayRoleOverride: DisplayRoleOverride = DisplayRoleOverride.AUTO,
     val dualScreenInputFocus: DualScreenInputFocus = DualScreenInputFocus.AUTO,
     val installedOnlyHome: Boolean = false,

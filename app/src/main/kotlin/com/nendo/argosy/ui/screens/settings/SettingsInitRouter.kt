@@ -405,6 +405,8 @@ internal fun routeLoadSettings(vm: SettingsViewModel) {
             ambientLedAvailable = vm.displayDelegate.isAmbientLedAvailable(),
             hasScreenCapturePermission = vm.displayDelegate.hasScreenCapturePermission(),
             hasSecondaryDisplay = vm.displayAffinityHelper.hasSecondaryDisplay,
+            hasPhysicalSecondaryDisplay = vm.displayAffinityHelper.hasPhysicalSecondaryDisplay,
+            dualScreenEnabled = prefs.dualScreenEnabled,
             displayRoleOverride = prefs.displayRoleOverride,
             installedOnlyHome = prefs.installedOnlyHome
         ))

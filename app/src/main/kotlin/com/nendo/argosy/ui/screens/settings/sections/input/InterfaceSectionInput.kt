@@ -19,7 +19,7 @@ internal class InterfaceSectionInput(
 
     override fun onConfirm(): InputResult {
         val state = viewModel.uiState.value
-        val layoutState = InterfaceLayoutState(state.display, state.ambientAudio.enabled, state.ambientAudio.isFolder, state.sounds.enabled, state.display.hasSecondaryDisplay)
+        val layoutState = InterfaceLayoutState(state.display, state.ambientAudio.enabled, state.ambientAudio.isFolder, state.sounds.enabled, state.display.hasSecondaryDisplay, state.display.hasPhysicalSecondaryDisplay, state.display.dualScreenEnabled)
         return when (interfaceItemAtFocusIndex(state.focusedIndex, layoutState)) {
             InterfaceItem.AccentColor -> { viewModel.resetToDefaultColor(); InputResult.HANDLED }
             InterfaceItem.SecondaryColor -> { viewModel.resetToDefaultSecondaryColor(); InputResult.HANDLED }
@@ -29,7 +29,7 @@ internal class InterfaceSectionInput(
 
     override fun onPrevSection(): InputResult {
         val state = viewModel.uiState.value
-        val layoutState = InterfaceLayoutState(state.display, state.ambientAudio.enabled, state.ambientAudio.isFolder, state.sounds.enabled, state.display.hasSecondaryDisplay)
+        val layoutState = InterfaceLayoutState(state.display, state.ambientAudio.enabled, state.ambientAudio.isFolder, state.sounds.enabled, state.display.hasSecondaryDisplay, state.display.hasPhysicalSecondaryDisplay, state.display.dualScreenEnabled)
         if (viewModel.jumpToPrevSection(interfaceSections(layoutState))) {
             return InputResult.HANDLED
         }
@@ -38,7 +38,7 @@ internal class InterfaceSectionInput(
 
     override fun onNextSection(): InputResult {
         val state = viewModel.uiState.value
-        val layoutState = InterfaceLayoutState(state.display, state.ambientAudio.enabled, state.ambientAudio.isFolder, state.sounds.enabled, state.display.hasSecondaryDisplay)
+        val layoutState = InterfaceLayoutState(state.display, state.ambientAudio.enabled, state.ambientAudio.isFolder, state.sounds.enabled, state.display.hasSecondaryDisplay, state.display.hasPhysicalSecondaryDisplay, state.display.dualScreenEnabled)
         if (viewModel.jumpToNextSection(interfaceSections(layoutState))) {
             return InputResult.HANDLED
         }
@@ -47,7 +47,7 @@ internal class InterfaceSectionInput(
 
     private fun cycle(direction: Int): InputResult {
         val state = viewModel.uiState.value
-        val layoutState = InterfaceLayoutState(state.display, state.ambientAudio.enabled, state.ambientAudio.isFolder, state.sounds.enabled, state.display.hasSecondaryDisplay)
+        val layoutState = InterfaceLayoutState(state.display, state.ambientAudio.enabled, state.ambientAudio.isFolder, state.sounds.enabled, state.display.hasSecondaryDisplay, state.display.hasPhysicalSecondaryDisplay, state.display.dualScreenEnabled)
         val hueStep = SettingsInputHandler.HUE_STEP
         when (interfaceItemAtFocusIndex(state.focusedIndex, layoutState)) {
             InterfaceItem.AccentColor -> { viewModel.adjustHue(direction * hueStep); return InputResult.HANDLED }
